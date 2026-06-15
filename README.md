@@ -50,6 +50,27 @@ npx.cmd vercel --prod
 
 The public Vercel URL can be opened from tablets and phones. The SQLite-backed Python API is for local development only; on Vercel, checklist edits fall back to browser storage so the public preview remains usable.
 
+## GitHub Pages preview while developing
+
+GitHub Pages is the preferred fallback when Vercel is unavailable. After the repository is pushed to GitHub, every push to `master` or `main` deploys `index.html`, `app.js`, and `styles.css` automatically.
+
+Create and push a GitHub repository:
+
+```powershell
+gh auth login -h github.com
+gh repo create ithe-app --public --source . --remote origin --push
+```
+
+For later updates:
+
+```powershell
+git add .
+git commit -m "Update app"
+git push origin master
+```
+
+The public URL will be shown in the repository's `Actions` page after the `Deploy static site to GitHub Pages` workflow completes.
+
 ## Git policy
 
 Runtime files such as SQLite databases, logs, Playwright videos, and generated screenshots are ignored. Commit source files and documentation only.
