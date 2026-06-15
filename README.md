@@ -58,7 +58,13 @@ Create and push a GitHub repository:
 
 ```powershell
 gh auth login -h github.com
-gh repo create ithe-app --public --source . --remote origin --push
+.\publish-github.ps1
+```
+
+To use a different repository name:
+
+```powershell
+.\publish-github.ps1 -RepoName your-repo-name
 ```
 
 For later updates:
