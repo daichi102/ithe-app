@@ -12,7 +12,10 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 
 gh auth status | Out-Null
 
-$remote = git remote get-url origin 2>$null
+$remote = $null
+if ((git remote) -contains "origin") {
+  $remote = git remote get-url origin
+}
 
 if (-not $remote) {
   gh repo create $RepoName --$Visibility --source . --remote origin --push
@@ -23,4 +26,3 @@ if (-not $remote) {
 Write-Host ""
 Write-Host "Repository:"
 gh repo view --web
-
