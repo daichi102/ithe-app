@@ -27,6 +27,29 @@ python server.py
 
 For local-only settings, copy `.env.example` to `.env` as a memo. The server reads OS environment variables directly.
 
+## Vercel preview while developing
+
+Install and log in to the Vercel CLI once:
+
+```powershell
+npm.cmd install
+npx.cmd vercel login
+```
+
+Create a public preview deployment:
+
+```powershell
+npx.cmd vercel
+```
+
+Deploy the current state to production:
+
+```powershell
+npx.cmd vercel --prod
+```
+
+The public Vercel URL can be opened from tablets and phones. The SQLite-backed Python API is for local development only; on Vercel, checklist edits fall back to browser storage so the public preview remains usable.
+
 ## Git policy
 
 Runtime files such as SQLite databases, logs, Playwright videos, and generated screenshots are ignored. Commit source files and documentation only.

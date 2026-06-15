@@ -26,3 +26,4 @@ view-playwright-recording.html
 .env
 .venv/
 venv/
+node_modules/

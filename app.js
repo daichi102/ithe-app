@@ -378,6 +378,7 @@ let lastListView = "deliveryCases";
 let newCaseMode = "delivery";
 let signatureLocked = false;
 let activeChecklistRecord = null;
+const checklistStoragePrefix = "ithe_delivery_checklist:";
 let pendingSignatureReportCaseId = null;
 
 const carryInCheckLabels = [
@@ -1576,6 +1577,22 @@ function applyChecklistPayload(payload) {
   renderChecklistPreview();
 }
 
+function getLocalChecklist(caseId) {
+  try {
+    const raw = localStorage.getItem(`${checklistStoragePrefix}${caseId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function saveLocalChecklist(caseId, payload) {
+  const updatedAt = new Date().toLocaleString("ja-JP");
+  const record = { caseId, payload, updatedAt };
+  localStorage.setItem(`${checklistStoragePrefix}${caseId}`, JSON.stringify(record));
+  return record;
+}
+
 async function loadChecklist(caseId) {
   if (!caseId) return;
   setChecklistStatus("DB読込中", "yellow");
@@ -1591,7 +1608,14 @@ async function loadChecklist(caseId) {
       setChecklistStatus("未保存", "yellow");
     }
   } catch (error) {
-    setChecklistStatus("DB接続なし", "red");
+    const localRecord = getLocalChecklist(caseId);
+    if (localRecord?.payload) {
+      activeChecklistRecord = localRecord;
+      applyChecklistPayload(localRecord.payload);
+      setChecklistStatus(`端末保存済み ${localRecord.updatedAt}`, "green");
+      return;
+    }
+    setChecklistStatus("公開プレビュー保存", "yellow");
   }
 }
 
@@ -1610,8 +1634,10 @@ async function saveChecklist() {
     setChecklistStatus(`保存済 ${data.updatedAt}`, "green");
     return true;
   } catch (error) {
-    setChecklistStatus("保存失敗", "red");
-    return false;
+    const localRecord = saveLocalChecklist(caseId, readChecklistForm());
+    activeChecklistRecord = localRecord;
+    setChecklistStatus(`端末保存済み ${localRecord.updatedAt}`, "green");
+    return true;
   }
 }
 

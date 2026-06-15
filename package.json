@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "python server.py",
+    "build": "node -e \"console.log('Static Vercel deploy')\"",
+    "deploy": "npx vercel",
+    "deploy:prod": "npx vercel --prod"
+  }
+}
