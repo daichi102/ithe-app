@@ -1085,6 +1085,37 @@ textarea:focus {
   font-weight: 900;
 }
 
+.dispatch-chip {
+  width: min(190px, 100%);
+  min-height: 58px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid #c7d7fe;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #f0f7ff;
+  color: #175cd3;
+  text-align: left;
+  font-weight: 900;
+}
+
+.dispatch-chip span,
+.dispatch-chip small {
+  color: #475467;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dispatch-chip.empty {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  min-height: 32px;
+  border-color: var(--line);
+  background: #f8fafc;
+  color: var(--muted);
+}
+
 .count-pill {
   min-height: 26px;
   display: inline-flex;
@@ -1109,7 +1140,7 @@ textarea:focus {
 
 table {
   width: 100%;
-  min-width: 1080px;
+  min-width: 1240px;
   border-collapse: collapse;
 }
 

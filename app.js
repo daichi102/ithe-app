@@ -935,6 +935,42 @@ function getRunStep(run) {
   return { action: "departed", label: "出発", status: `${activeStop.caseId}作業終了`, stop: activeStop, item };
 }
 
+function getRunCaseAssignment(caseId) {
+  for (const run of deliveryRuns) {
+    const stop = run.stops.find((item) => item.caseId === caseId);
+    if (stop) return { run, stop };
+  }
+  return null;
+}
+
+function getStopStatus(stop) {
+  if (!stop.arrivedAt) return "未着手";
+  if (!stop.workStartedAt) return "到着済み";
+  if (!stop.workFinishedAt) return "作業中";
+  if (!stop.departedAt) return "作業終了";
+  return "完了";
+}
+
+function renderDispatchChip(caseId) {
+  const assignment = getRunCaseAssignment(caseId);
+  if (!assignment) return `<span class="dispatch-chip empty">未配車</span>`;
+  const { run, stop } = assignment;
+  return `
+    <button class="dispatch-chip" type="button" data-open-run="${run.id}" data-stop-case="${caseId}">
+      <strong>${run.vehicleName}</strong>
+      <span>${run.plateNo}</span>
+      <small>${stop.plannedTime} / ${getStopStatus(stop)}</small>
+    </button>
+  `;
+}
+
+function syncCaseStatusFromRunAction(action, caseId) {
+  const item = cases.find((entry) => entry.id === caseId);
+  if (!item) return;
+  if (action === "arrived" || action === "workStarted") setDeliveryStatus(item, "\u4f5c\u696d\u4e2d", "\u8eca\u4e21\u65e5\u5831");
+  if (action === "departed") setDeliveryStatus(item, "\u4f5c\u696d\u5b8c\u4e86", "\u8eca\u4e21\u65e5\u5831");
+}
+
 function renderVehicleRuns() {
   const target = $("#todayVehicleRuns");
   if (!target) return;
@@ -1037,9 +1073,11 @@ function recordRunAction(runId, action, caseId) {
   if (stop && action === "workStarted") stop.workStartedAt = time;
   if (stop && action === "workFinished") stop.workFinishedAt = time;
   if (stop && action === "departed") stop.departedAt = time;
+  syncCaseStatusFromRunAction(action, caseId);
   run.status = getRunStep(run).status;
   saveVehicleRunState();
-  renderVehicleRuns();
+  renderCases();
+  renderDashboard();
   renderVehicleRunDialog(runId);
 }
 
@@ -1257,6 +1295,7 @@ function renderCases() {
           <td>${item.siteName}</td>
           <td>${item.visitDate}</td>
           <td>${item.worker}</td>
+          <td>${renderDispatchChip(item.id)}</td>
           <td>
             <div class="table-actions">
               ${getDeliveryPrimaryAction(item)}
@@ -1267,7 +1306,7 @@ function renderCases() {
       `;
         },
       )
-      .join("") || `<tr><td colspan="9"><p class="empty-state">条件に一致する配送案件はありません</p></td></tr>`;
+      .join("") || `<tr><td colspan="10"><p class="empty-state">条件に一致する配送案件はありません</p></td></tr>`;
 }
 
 function renderConstructionCases() {
