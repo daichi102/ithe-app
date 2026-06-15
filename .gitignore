@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+*.out.log
+*.err.log
+
+# Test and browser artifacts
+playwright-videos/
+test-results/
+playwright-report/
+*-result.png
+スクリーンショット*.png
+view-playwright-recording.html
+
+# Local reference files and binary exports
+*.pdf
+
+# Local-only files
+.env
+.venv/
+venv/
