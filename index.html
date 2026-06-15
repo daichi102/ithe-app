@@ -102,6 +102,16 @@
               <div id="todayDeliveryCases" class="case-stack"></div>
             </section>
           </div>
+          <section class="panel vehicle-report-panel">
+            <div class="panel-head">
+              <div>
+                <h3>本日の車両日報</h3>
+                <p class="panel-subtitle">トラックナンバーをクリックして、出発・到着・作業・出発の時刻を記録します。</p>
+              </div>
+              <span id="vehicleRunCount" class="count-pill"></span>
+            </div>
+            <div id="todayVehicleRuns" class="vehicle-run-grid"></div>
+          </section>
           <section class="panel dashboard-report-panel">
             <div class="panel-head">
               <div>
@@ -422,6 +432,12 @@
           </section>
         </section>
       </main>
+    </div>
+
+    <div id="vehicleRunDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="vehicleRunTitle">
+      <section class="modal-panel vehicle-run-modal">
+        <div id="vehicleRunContent"></div>
+      </section>
     </div>
 
     <div id="signatureReportDialog" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="signatureReportTitle">

@@ -379,7 +379,40 @@ let newCaseMode = "delivery";
 let signatureLocked = false;
 let activeChecklistRecord = null;
 const checklistStoragePrefix = "ithe_delivery_checklist:";
+const vehicleRunStorageKey = "ithe_vehicle_runs";
 let pendingSignatureReportCaseId = null;
+
+const deliveryRuns = [
+  {
+    id: "run-001",
+    deliveryDate: todayDate,
+    runName: "1便",
+    vehicleName: "1号車",
+    plateNo: "横浜 100 あ 1234",
+    driverName: "横浜中央ST 中谷",
+    status: "未出発",
+    companyDepartedAt: "",
+    companyReturnedAt: "",
+    stops: [
+      { caseId: "AIZA-TEST-001", plannedTime: "09:30", sortOrder: 1, arrivedAt: "", workStartedAt: "", workFinishedAt: "", departedAt: "" },
+      { caseId: "AIZA-TEST-002", plannedTime: "11:00", sortOrder: 2, arrivedAt: "", workStartedAt: "", workFinishedAt: "", departedAt: "" },
+    ],
+  },
+  {
+    id: "run-002",
+    deliveryDate: todayDate,
+    runName: "2便",
+    vehicleName: "2号車",
+    plateNo: "名古屋 400 い 5678",
+    driverName: "名古屋ST 佐藤",
+    status: "未出発",
+    companyDepartedAt: "",
+    companyReturnedAt: "",
+    stops: [
+      { caseId: "AIZA-TEST-003", plannedTime: "10:30", sortOrder: 1, arrivedAt: "", workStartedAt: "", workFinishedAt: "", departedAt: "" },
+    ],
+  },
+];
 
 const carryInCheckLabels = [
   "開梱時、商品のキズ確認（キズがある場合、写真）",
@@ -824,6 +857,192 @@ function renderReportQueue() {
       .join("") || `<p class="empty-state">作業完了になった配送案件はまだありません</p>`;
 }
 
+function loadVehicleRunState() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(vehicleRunStorageKey) || "{}");
+    deliveryRuns.forEach((run) => {
+      const saved = stored[run.id];
+      if (!saved) return;
+      Object.assign(run, {
+        status: saved.status || run.status,
+        companyDepartedAt: saved.companyDepartedAt || "",
+        companyReturnedAt: saved.companyReturnedAt || "",
+      });
+      run.stops.forEach((stop) => {
+        const savedStop = saved.stops?.find((item) => item.caseId === stop.caseId);
+        if (savedStop) Object.assign(stop, savedStop);
+      });
+    });
+  } catch (error) {
+    localStorage.removeItem(vehicleRunStorageKey);
+  }
+}
+
+function saveVehicleRunState() {
+  const state = Object.fromEntries(deliveryRuns.map((run) => [run.id, run]));
+  localStorage.setItem(vehicleRunStorageKey, JSON.stringify(state));
+}
+
+function nowTime() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
+function minutesFromTime(value) {
+  if (!/^\d{2}:\d{2}$/.test(value || "")) return null;
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function diffMinutes(start, end) {
+  const startMinutes = minutesFromTime(start);
+  const endMinutes = minutesFromTime(end);
+  if (startMinutes === null || endMinutes === null || endMinutes < startMinutes) return 0;
+  return endMinutes - startMinutes;
+}
+
+function formatDuration(minutes) {
+  if (!minutes) return "0分";
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return hours ? `${hours}時間${rest ? `${rest}分` : ""}` : `${rest}分`;
+}
+
+function getRunTotals(run) {
+  let driving = 0;
+  let work = 0;
+  let previousDeparture = run.companyDepartedAt;
+  run.stops.forEach((stop) => {
+    driving += diffMinutes(previousDeparture, stop.arrivedAt);
+    work += diffMinutes(stop.workStartedAt || stop.arrivedAt, stop.workFinishedAt || stop.departedAt);
+    previousDeparture = stop.departedAt || previousDeparture;
+  });
+  driving += diffMinutes(previousDeparture, run.companyReturnedAt);
+  return { driving, work };
+}
+
+function getRunStep(run) {
+  if (!run.companyDepartedAt) return { action: "companyDeparted", label: "会社出発", status: "未出発" };
+  const activeStop = run.stops.find((stop) => !stop.departedAt);
+  if (!activeStop) {
+    if (!run.companyReturnedAt) return { action: "companyReturned", label: "会社帰着", status: "帰社中" };
+    return { action: "", label: "", status: "完了" };
+  }
+  const item = cases.find((entry) => entry.id === activeStop.caseId);
+  if (!activeStop.arrivedAt) return { action: "arrived", label: "到着", status: `${activeStop.caseId}へ移動中`, stop: activeStop, item };
+  if (!activeStop.workStartedAt) return { action: "workStarted", label: "作業開始", status: `${activeStop.caseId}到着済み`, stop: activeStop, item };
+  if (!activeStop.workFinishedAt) return { action: "workFinished", label: "作業終了", status: `${activeStop.caseId}作業中`, stop: activeStop, item };
+  return { action: "departed", label: "出発", status: `${activeStop.caseId}作業終了`, stop: activeStop, item };
+}
+
+function renderVehicleRuns() {
+  const target = $("#todayVehicleRuns");
+  if (!target) return;
+  const runs = deliveryRuns.filter((run) => run.deliveryDate === todayDate);
+  $("#vehicleRunCount").textContent = `${runs.length}台`;
+  target.innerHTML = runs
+    .map((run) => {
+      const step = getRunStep(run);
+      const totals = getRunTotals(run);
+      const nextStop = run.stops.find((stop) => !stop.departedAt);
+      const nextCase = nextStop ? cases.find((item) => item.id === nextStop.caseId) : null;
+      const doneCount = run.stops.filter((stop) => stop.departedAt).length;
+      return `
+        <button class="vehicle-run-card tappable-card" type="button" data-open-run="${run.id}">
+          <div class="vehicle-run-head">
+            <div>
+              <strong>${run.plateNo}</strong>
+              <span>${run.vehicleName} / ${run.runName}</span>
+            </div>
+            ${badge(step.status)}
+          </div>
+          <div class="vehicle-run-meta">
+            <span>担当: ${run.driverName}</span>
+            <span>案件: ${doneCount}/${run.stops.length}</span>
+          </div>
+          <p class="workflow-site">次: ${nextCase ? `${nextCase.id} ${nextCase.siteName}` : "帰社または完了"}</p>
+          <div class="vehicle-run-totals">
+            <span>運転 ${formatDuration(totals.driving)}</span>
+            <span>作業 ${formatDuration(totals.work)}</span>
+          </div>
+        </button>
+      `;
+    })
+    .join("") || `<p class="empty-state">本日の配送便はありません</p>`;
+}
+
+function renderVehicleRunDialog(runId) {
+  const run = deliveryRuns.find((item) => item.id === runId);
+  const dialog = $("#vehicleRunDialog");
+  const content = $("#vehicleRunContent");
+  if (!run || !dialog || !content) return;
+  const step = getRunStep(run);
+  const totals = getRunTotals(run);
+  content.innerHTML = `
+    <div class="vehicle-run-modal-head">
+      <div>
+        <p class="eyebrow">${run.vehicleName} / ${run.runName}</p>
+        <h3 id="vehicleRunTitle">${run.plateNo}</h3>
+        <p>担当: ${run.driverName}</p>
+      </div>
+      <button class="icon-button" type="button" data-close-run>×</button>
+    </div>
+    <div class="vehicle-run-current">
+      <strong>現在: ${step.status}</strong>
+      ${step.action && currentRole !== "viewer" ? `<button class="primary" type="button" data-run-action="${step.action}" data-run-id="${run.id}" data-case-id="${step.stop?.caseId || ""}">${step.label}</button>` : ""}
+    </div>
+    <div class="vehicle-run-totals large">
+      <span>運転時間 ${formatDuration(totals.driving)}</span>
+      <span>作業時間 ${formatDuration(totals.work)}</span>
+    </div>
+    <div class="vehicle-run-log">
+      <div class="vehicle-run-log-row"><span>会社出発</span><strong>${run.companyDepartedAt || "-"}</strong></div>
+      ${run.stops
+        .map((stop) => {
+          const item = cases.find((entry) => entry.id === stop.caseId);
+          return `
+            <article class="vehicle-stop">
+              <div>
+                <strong>${stop.plannedTime} ${stop.caseId}</strong>
+                <p>${item?.siteName || ""}</p>
+              </div>
+              <dl>
+                <div><dt>到着</dt><dd>${stop.arrivedAt || "-"}</dd></div>
+                <div><dt>作業開始</dt><dd>${stop.workStartedAt || "-"}</dd></div>
+                <div><dt>作業終了</dt><dd>${stop.workFinishedAt || "-"}</dd></div>
+                <div><dt>出発</dt><dd>${stop.departedAt || "-"}</dd></div>
+              </dl>
+            </article>
+          `;
+        })
+        .join("")}
+      <div class="vehicle-run-log-row"><span>会社帰着</span><strong>${run.companyReturnedAt || "-"}</strong></div>
+    </div>
+  `;
+  dialog.classList.remove("hidden");
+}
+
+function closeVehicleRunDialog() {
+  $("#vehicleRunDialog")?.classList.add("hidden");
+}
+
+function recordRunAction(runId, action, caseId) {
+  const run = deliveryRuns.find((item) => item.id === runId);
+  if (!run) return;
+  const time = nowTime();
+  const stop = run.stops.find((item) => item.caseId === caseId);
+  if (action === "companyDeparted") run.companyDepartedAt = time;
+  if (action === "companyReturned") run.companyReturnedAt = time;
+  if (stop && action === "arrived") stop.arrivedAt = time;
+  if (stop && action === "workStarted") stop.workStartedAt = time;
+  if (stop && action === "workFinished") stop.workFinishedAt = time;
+  if (stop && action === "departed") stop.departedAt = time;
+  run.status = getRunStep(run).status;
+  saveVehicleRunState();
+  renderVehicleRuns();
+  renderVehicleRunDialog(runId);
+}
+
 function renderDashboard() {
   renderSummary();
   $("#todayConstructionCases").innerHTML = cases
@@ -878,6 +1097,7 @@ function renderDashboard() {
 
   renderScheduleCalendar();
   renderReportQueue();
+  renderVehicleRuns();
 }
 
 function getCalendarDays() {
@@ -1862,6 +2082,24 @@ document.addEventListener("click", (event) => {
   const navItem = event.target.closest(".nav-item");
   if (navItem) switchView(navItem.dataset.view);
 
+  const openRunButton = event.target.closest("[data-open-run]");
+  if (openRunButton) {
+    renderVehicleRunDialog(openRunButton.dataset.openRun);
+    return;
+  }
+
+  const closeRunButton = event.target.closest("[data-close-run]");
+  if (closeRunButton || event.target.id === "vehicleRunDialog") {
+    closeVehicleRunDialog();
+    return;
+  }
+
+  const runActionButton = event.target.closest("[data-run-action]");
+  if (runActionButton && currentRole !== "viewer") {
+    recordRunAction(runActionButton.dataset.runId, runActionButton.dataset.runAction, runActionButton.dataset.caseId);
+    return;
+  }
+
   const checklistCaseButton = event.target.closest("[data-checklist-case]");
   if (checklistCaseButton) {
     event.stopPropagation();
@@ -2044,5 +2282,6 @@ document.addEventListener("click", (event) => {
 $("#globalSearch").addEventListener("input", renderCases);
 $("#globalSearch").addEventListener("input", renderConstructionCases);
 $("#confirmSearch").addEventListener("input", renderConfirmations);
+loadVehicleRunState();
 initSignaturePad();
 renderAll();

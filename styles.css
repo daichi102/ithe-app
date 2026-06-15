@@ -940,6 +940,151 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.vehicle-report-panel {
+  margin-bottom: 14px;
+}
+
+.vehicle-run-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.vehicle-run-card {
+  min-height: 176px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  text-align: left;
+  box-shadow: none;
+}
+
+.vehicle-run-head,
+.vehicle-run-meta,
+.vehicle-run-totals,
+.vehicle-run-modal-head,
+.vehicle-run-current,
+.vehicle-run-log-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vehicle-run-head,
+.vehicle-run-modal-head,
+.vehicle-run-current,
+.vehicle-run-log-row {
+  justify-content: space-between;
+}
+
+.vehicle-run-head strong,
+.vehicle-run-head span {
+  display: block;
+}
+
+.vehicle-run-head span,
+.vehicle-run-meta {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.vehicle-run-meta,
+.vehicle-run-totals {
+  flex-wrap: wrap;
+}
+
+.vehicle-run-totals span {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: #eef2f6;
+  color: #475467;
+  font-weight: 900;
+}
+
+.vehicle-run-totals.large {
+  margin: 12px 0;
+}
+
+.vehicle-run-totals.large span {
+  min-height: 38px;
+  background: #f0f7ff;
+  color: #175cd3;
+}
+
+.vehicle-run-modal {
+  width: min(760px, 100%);
+}
+
+.vehicle-run-modal-head {
+  margin-bottom: 14px;
+}
+
+.vehicle-run-modal-head h3,
+.vehicle-run-modal-head p {
+  margin: 0;
+}
+
+.vehicle-run-current {
+  min-height: 62px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.vehicle-run-log {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.vehicle-run-log-row,
+.vehicle-stop {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.vehicle-stop {
+  display: grid;
+  gap: 10px;
+}
+
+.vehicle-stop p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.vehicle-stop dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.vehicle-stop dl div {
+  border-radius: 6px;
+  padding: 8px;
+  background: #f8fafc;
+}
+
+.vehicle-stop dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.vehicle-stop dd {
+  margin: 2px 0 0;
+  font-weight: 900;
+}
+
 .count-pill {
   min-height: 26px;
   display: inline-flex;
@@ -1475,5 +1620,15 @@ canvas {
 
   .field-grid {
     grid-template-columns: 1fr;
+  }
+
+  .vehicle-stop dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vehicle-run-current,
+  .vehicle-run-modal-head {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
