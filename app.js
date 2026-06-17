@@ -1156,27 +1156,42 @@ function renderScheduleCalendar() {
   const days = getCalendarDays();
   const keys = days.map(formatDate);
   const periodItems = cases.filter((item) => keys.includes(item.visitDate));
+  const periodRuns = deliveryRuns.filter((run) => keys.includes(run.deliveryDate));
   const summary = $("#dashboardCalendarSummary");
   if (summary) {
     const firstDay = days[0];
     const lastDay = days[days.length - 1];
     summary.textContent =
       calendarRange === "today"
-        ? `${formatCalendarLabel(firstDay)} / ${periodItems.length}件`
-        : `${formatCalendarLabel(firstDay)} - ${formatCalendarLabel(lastDay)} / ${periodItems.length}件`;
+        ? `${formatCalendarLabel(firstDay)} / 案件${periodItems.length}件・車両${periodRuns.length}台`
+        : `${formatCalendarLabel(firstDay)} - ${formatCalendarLabel(lastDay)} / 案件${periodItems.length}件・車両${periodRuns.length}台`;
   }
   $("#scheduleCalendar").className = `schedule-calendar ${calendarRange}`;
   $("#scheduleCalendar").innerHTML = days
     .map((date) => {
       const key = formatDate(date);
       const items = cases.filter((item) => item.visitDate === key);
+      const runs = deliveryRuns.filter((run) => run.deliveryDate === key);
       return `
         <article class="schedule-day">
           <div class="schedule-date">
             <strong>${date.getMonth() + 1}/${date.getDate()}</strong>
-            <span>${["日", "月", "火", "水", "木", "金", "土"][date.getDay()]}・${items.length}件</span>
+            <span>${["日", "月", "火", "水", "木", "金", "土"][date.getDay()]}・${items.length}件・${runs.length}台</span>
           </div>
           <div class="schedule-items">
+            ${runs
+              .map((run) => {
+                const step = getRunStep(run);
+                const doneCount = run.stops.filter((stop) => stop.departedAt).length;
+                return `
+                  <button class="schedule-item vehicle" type="button" data-open-run="${run.id}">
+                    <span>稼働車両 ${badge(step.status)}</span>
+                    <strong>${run.vehicleName} / ${run.runName}</strong>
+                    <small>${run.plateNo} / ${run.driverName} / 案件${doneCount}/${run.stops.length}</small>
+                  </button>
+                `;
+              })
+              .join("")}
             ${
               items
                 .map(
@@ -1188,7 +1203,7 @@ function renderScheduleCalendar() {
                     </button>
                   `,
                 )
-                .join("") || `<p class="empty-state small">予定なし</p>`
+                .join("") || (runs.length ? "" : `<p class="empty-state small">予定なし</p>`)
             }
           </div>
         </article>

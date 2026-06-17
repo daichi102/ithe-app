@@ -719,10 +719,23 @@ textarea:focus {
   border-left-color: var(--green);
 }
 
+.schedule-item.vehicle {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .schedule-item span {
   color: var(--muted);
   font-size: 11px;
   font-weight: 900;
+}
+
+.schedule-item span .badge {
+  margin-left: 6px;
+  min-height: 20px;
+  padding: 0 7px;
+  font-size: 10px;
+  vertical-align: middle;
 }
 
 .schedule-item strong,
