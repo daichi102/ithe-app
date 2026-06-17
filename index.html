@@ -275,10 +275,28 @@
           </div>
           <section class="panel table-panel">
             <div class="panel-head">
-              <h3>配送メール受信</h3>
-              <span class="muted">配送メールの取込結果と確認が必要な内容を扱う</span>
+              <div>
+                <h3>配送メール受信一覧</h3>
+                <p class="panel-subtitle">配送メールの取込内容を確認し、案件確定すると案件管理のハイアールに追加されます。</p>
+              </div>
+              <span id="confirmCaseCount" class="count-pill"></span>
             </div>
-            <div id="confirmCards" class="confirm-grid"></div>
+            <div class="table-wrap">
+              <table class="confirm-table">
+                <thead>
+                  <tr>
+                    <th>状態</th>
+                    <th>案件番号</th>
+                    <th>発生元</th>
+                    <th>確認内容</th>
+                    <th>読取値</th>
+                    <th>修正値</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="confirmRows"></tbody>
+              </table>
+            </div>
           </section>
         </section>
 

@@ -516,6 +516,8 @@ const roleLabels = {
 
 const statusColor = {
   要確認: "red",
+  未確認: "red",
+  確認済み: "green",
   確認中: "yellow",
   見積作成中: "yellow",
   案件確定済み: "green",
@@ -1350,6 +1352,7 @@ function getFilteredCases(caseType) {
   let rows = cases.filter((item) => item.caseType === caseType);
   if (region !== "all") rows = rows.filter((item) => item.region === region);
   if (caseType === "配送" && deliveryTypeFilter !== "all") rows = rows.filter((item) => (item.deliveryType || "ハイアール") === deliveryTypeFilter);
+  if (caseType === "配送" && deliveryTypeFilter === "ハイアール") rows = rows.filter(isConfirmedForCaseManagement);
   if (caseType === "配送" && state !== "all") rows = rows.filter((item) => item.status === state);
   if (caseType === "工事" && state === "処理済み") rows = rows.filter((item) => item.processState === "処理済み");
   if (caseType === "工事" && state === "要確認") rows = rows.filter((item) => item.processState === "要確認");
@@ -1363,6 +1366,24 @@ function setDeliveryStatus(item, status, reason) {
   item.status = status;
   item.processState = status === "要確認" ? "要確認" : "処理済み";
   item.history.unshift(`2026-06-10 ${reason}: ${before} → ${status}`);
+}
+
+function confirmDeliveryMail(confirmationId) {
+  const confirmation = confirmations.find((item) => item.id === confirmationId);
+  if (!confirmation) return;
+  const target = cases.find((item) => item.id === confirmation.caseId);
+  if (!target || target.caseType !== "配送") return;
+  confirmation.status = "confirmed";
+  target.deliveryType = "ハイアール";
+  target.processState = "処理済み";
+  setDeliveryStatus(target, "作業確定", "配送メール案件確定");
+  if (!target.history.some((entry) => entry.includes("配送メール案件確定"))) {
+    target.history.unshift(`2026-06-10 配送メール案件確定: ${confirmation.reason}`);
+  }
+  deliveryTypeFilter = "ハイアール";
+  renderDashboard();
+  renderConfirmations();
+  renderCases();
 }
 
 function getDeliveryPrimaryAction(item) {
@@ -1745,33 +1766,44 @@ function maskAddress(value) {
   return currentRole === "viewer" ? value.replace(/(.{8}).+/, "$1...") : value;
 }
 
+function getConfirmationForCase(caseId) {
+  return confirmations.find((item) => item.caseId === caseId);
+}
+
+function isConfirmedForCaseManagement(item) {
+  const confirmation = getConfirmationForCase(item.id);
+  return !confirmation || confirmation.status === "confirmed";
+}
+
 function renderConfirmations() {
   const query = $("#confirmSearch").value.trim();
-  let rows = confirmations;
+  let rows = confirmations.filter((item) => item.caseId.startsWith("AIZA"));
   if (confirmFilter !== "all") rows = rows.filter((item) => item.status === confirmFilter);
-  if (typeFilter === "工事") rows = rows.filter((item) => item.caseId.startsWith("KOJI"));
-  if (typeFilter === "配送") rows = rows.filter((item) => item.caseId.startsWith("AIZA"));
   if (query) rows = rows.filter((item) => `${item.caseId}${item.reason}${item.source}`.includes(query));
-  $("#confirmCards").innerHTML = rows
-    .map(
-      (item) => `
-        <article class="confirm-card">
-          <div class="panel-head">
-            <h3>${item.caseId}</h3>
-            <span class="badge ${item.status === "confirmed" ? "green" : "red"}">${item.status === "confirmed" ? "確認済み" : "未確認"}</span>
-          </div>
-          <p>${item.reason}</p>
-          ${field("発生元", item.source)}
-          ${field("読取・登録値", item.rawValue)}
-          <label>修正値<input value="${item.correctedValue}" ${currentRole === "viewer" ? "disabled" : ""} /></label>
-          <div class="button-row">
-            <button class="secondary" type="button" data-detail="${item.caseId}">案件詳細</button>
-            <button class="primary admin-action" type="button" data-confirm="${item.id}" ${currentRole !== "admin" || item.status === "confirmed" ? "disabled" : ""}>確認済みにする</button>
-          </div>
-        </article>
-      `,
-    )
-    .join("");
+  const count = $("#confirmCaseCount");
+  if (count) count.textContent = `${rows.length}件`;
+  $("#confirmRows").innerHTML =
+    rows
+      .map((item) => {
+        const confirmed = item.status === "confirmed";
+        return `
+          <tr class="clickable-row" data-detail="${item.caseId}" data-source-view="confirmations" tabindex="0">
+            <td>${badge(confirmed ? "確認済み" : "未確認")}</td>
+            <td><strong>${item.caseId}</strong></td>
+            <td>${item.source}</td>
+            <td>${item.reason}</td>
+            <td>${item.rawValue}</td>
+            <td>${item.correctedValue}</td>
+            <td>
+              <div class="table-actions">
+                <button class="secondary" type="button" data-detail="${item.caseId}" data-source-view="confirmations">詳細</button>
+                <button class="primary operator-action" type="button" data-confirm-case="${item.id}" ${currentRole === "viewer" || confirmed ? "disabled" : ""}>案件確定</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      })
+      .join("") || `<tr><td colspan="7"><p class="empty-state">対象の配送メールはありません</p></td></tr>`;
 }
 
 function renderChecklist() {
@@ -2377,10 +2409,18 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const confirmCaseButton = event.target.closest("[data-confirm-case]");
+  if (confirmCaseButton && currentRole !== "viewer") {
+    event.stopPropagation();
+    confirmDeliveryMail(confirmCaseButton.dataset.confirmCase);
+    return;
+  }
+
   const detailButton = event.target.closest("[data-detail]");
   if (detailButton) {
     if (detailButton.dataset.sourceView) lastListView = detailButton.dataset.sourceView;
     renderDetail(detailButton.dataset.detail);
+    return;
   }
 
   const openType = event.target.closest("[data-open-type]");
