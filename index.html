@@ -52,7 +52,8 @@
           </div>
         </div>
         <nav class="nav-list" aria-label="メインメニュー">
-          <button class="nav-item active" data-view="confirmations"><span>□</span>配送メール受信</button>
+          <button class="nav-item active" data-view="dashboard"><span>□</span>ダッシュボード</button>
+          <button class="nav-item" data-view="confirmations"><span>受</span>配送メール受信</button>
           <div class="nav-group open">
             <button class="nav-item nav-parent" type="button" data-nav-toggle="caseManagement" aria-expanded="true">
               <span>▤</span>案件管理
@@ -81,7 +82,7 @@
         <header class="topbar">
           <div>
             <p class="eyebrow">業務管理</p>
-            <h2 id="pageTitle">配送メール受信</h2>
+            <h2 id="pageTitle">ダッシュボード</h2>
           </div>
           <div class="topbar-actions">
             <div class="search-box">
@@ -96,7 +97,7 @@
           </div>
         </header>
 
-        <section id="dashboard" class="view">
+        <section id="dashboard" class="view active-view">
           <section class="panel dashboard-calendar-panel">
             <div class="panel-head">
               <div>
@@ -257,7 +258,7 @@
           <div id="newCaseContent"></div>
         </section>
 
-        <section id="confirmations" class="view active-view">
+        <section id="confirmations" class="view">
           <div class="toolbar">
             <div class="search-box compact">
               <span>⌕</span>
