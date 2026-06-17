@@ -366,8 +366,9 @@ const cases = [
 
 const confirmations = [
   { id: "CNF-001", caseId: "AIZA-01143698", source: "Excel取り込み", reason: "訪問設置日の形式が想定外です", rawValue: "6/9 AM 希望", correctedValue: "2026-06-09", status: "unchecked" },
-  { id: "CNF-002", caseId: "KOJI-000220", source: "工事登録", reason: "室外機置場と配管穴の位置確認が未完了", rawValue: "現地写真なし", correctedValue: "現地写真確認後に工事可否判断", status: "unchecked" },
-  { id: "CNF-003", caseId: "AIZA-01143722", source: "売上管理API", reason: "連携再試行後に成功", rawValue: "timeout", correctedValue: "synced", status: "confirmed" },
+  { id: "CNF-TEST-001", caseId: "AIZA-TEST-001", source: "テスト配送メール", reason: "テスト用メール取込", rawValue: "AIZA_TEST_001.xlsx", correctedValue: "案件確定待ち", status: "unchecked" },
+  { id: "CNF-TEST-002", caseId: "AIZA-TEST-002", source: "テスト配送メール", reason: "テスト用メール取込", rawValue: "AIZA_TEST_002.xlsx", correctedValue: "案件確定待ち", status: "unchecked" },
+  { id: "CNF-TEST-003", caseId: "AIZA-TEST-003", source: "テスト配送メール", reason: "テスト用メール取込", rawValue: "AIZA_TEST_003.xlsx", correctedValue: "案件確定待ち", status: "unchecked" },
 ];
 
 let activeRegion = "all";
@@ -389,37 +390,7 @@ const checklistStoragePrefix = "ithe_delivery_checklist:";
 const vehicleRunStorageKey = "ithe_vehicle_runs";
 let pendingSignatureReportCaseId = null;
 
-const deliveryRuns = [
-  {
-    id: "run-001",
-    deliveryDate: todayDate,
-    runName: "1便",
-    vehicleName: "1号車",
-    plateNo: "横浜 100 あ 1234",
-    driverName: "横浜中央ST 中谷",
-    status: "未出発",
-    companyDepartedAt: "",
-    companyReturnedAt: "",
-    stops: [
-      { caseId: "AIZA-TEST-001", plannedTime: "09:30", sortOrder: 1, arrivedAt: "", workStartedAt: "", workFinishedAt: "", departedAt: "" },
-      { caseId: "AIZA-TEST-002", plannedTime: "11:00", sortOrder: 2, arrivedAt: "", workStartedAt: "", workFinishedAt: "", departedAt: "" },
-    ],
-  },
-  {
-    id: "run-002",
-    deliveryDate: todayDate,
-    runName: "2便",
-    vehicleName: "2号車",
-    plateNo: "名古屋 400 い 5678",
-    driverName: "名古屋ST 佐藤",
-    status: "未出発",
-    companyDepartedAt: "",
-    companyReturnedAt: "",
-    stops: [
-      { caseId: "AIZA-TEST-003", plannedTime: "10:30", sortOrder: 1, arrivedAt: "", workStartedAt: "", workFinishedAt: "", departedAt: "" },
-    ],
-  },
-];
+const deliveryRuns = [];
 
 const carryInCheckLabels = [
   "開梱時、商品のキズ確認（キズがある場合、写真）",
@@ -827,7 +798,7 @@ function renderSummary() {
   const today = todayDate;
   const monthPrefix = "2026-06";
   const construction = cases.filter((item) => item.caseType === "工事");
-  const delivery = cases.filter((item) => item.caseType === "配送");
+  const delivery = cases.filter((item) => item.caseType === "配送" && isConfirmedForCaseManagement(item));
   const haierDelivery = delivery.filter((item) => item.deliveryType !== "販売店");
   const dealerDelivery = delivery.filter((item) => item.deliveryType === "販売店");
   const reportReady = getReportReadyCases();
@@ -857,7 +828,7 @@ function renderSummary() {
 }
 
 function getReportReadyCases() {
-  return cases.filter((item) => item.caseType === "配送" && ["作業完了", "完了報告書作成"].includes(item.status));
+  return cases.filter((item) => item.caseType === "配送" && isConfirmedForCaseManagement(item) && ["作業完了", "完了報告書作成"].includes(item.status));
 }
 
 function renderReportQueue() {
@@ -1070,6 +1041,7 @@ function renderDispatchManagement() {
 function renderMasterViews() {
   const customerMap = new Map();
   cases.forEach((item) => {
+    if (item.caseType === "配送" && !isConfirmedForCaseManagement(item)) return;
     if (!customerMap.has(item.customerName)) customerMap.set(item.customerName, []);
     customerMap.get(item.customerName).push(item);
   });
@@ -1094,6 +1066,7 @@ function renderMasterViews() {
 
   const workerMap = new Map();
   cases.forEach((item) => {
+    if (item.caseType === "配送" && !isConfirmedForCaseManagement(item)) return;
     const name = item.worker || "担当未設定";
     if (!workerMap.has(name)) workerMap.set(name, []);
     workerMap.get(name).push(item);
@@ -1226,7 +1199,7 @@ function renderDashboard() {
     .join("") || `<p class="empty-state">本日の工事案件はありません</p>`;
 
   $("#todayDeliveryCases").innerHTML = cases
-    .filter((item) => item.caseType === "配送" && item.visitDate === todayDate)
+    .filter((item) => item.caseType === "配送" && isConfirmedForCaseManagement(item) && item.visitDate === todayDate)
     .map(
       (item) => `
         <article class="case-card">
@@ -1274,7 +1247,7 @@ function getCalendarDays() {
 function renderScheduleCalendar() {
   const days = getCalendarDays();
   const keys = days.map(formatDate);
-  const periodItems = cases.filter((item) => keys.includes(item.visitDate));
+  const periodItems = cases.filter((item) => keys.includes(item.visitDate) && (item.caseType !== "配送" || isConfirmedForCaseManagement(item)));
   const periodRuns = deliveryRuns.filter((run) => keys.includes(run.deliveryDate));
   const summary = $("#dashboardCalendarSummary");
   if (summary) {
@@ -1289,7 +1262,7 @@ function renderScheduleCalendar() {
   $("#scheduleCalendar").innerHTML = days
     .map((date) => {
       const key = formatDate(date);
-      const items = cases.filter((item) => item.visitDate === key);
+      const items = cases.filter((item) => item.visitDate === key && (item.caseType !== "配送" || isConfirmedForCaseManagement(item)));
       const runs = deliveryRuns.filter((run) => run.deliveryDate === key);
       return `
         <article class="schedule-day">
@@ -1350,9 +1323,9 @@ function getFilteredCases(caseType) {
   const region = caseType === "工事" ? activeConstructionRegion : activeRegion;
   const state = caseType === "工事" ? constructionStateFilter : stateFilter;
   let rows = cases.filter((item) => item.caseType === caseType);
+  if (caseType === "配送") rows = rows.filter(isConfirmedForCaseManagement);
   if (region !== "all") rows = rows.filter((item) => item.region === region);
   if (caseType === "配送" && deliveryTypeFilter !== "all") rows = rows.filter((item) => (item.deliveryType || "ハイアール") === deliveryTypeFilter);
-  if (caseType === "配送" && deliveryTypeFilter === "ハイアール") rows = rows.filter(isConfirmedForCaseManagement);
   if (caseType === "配送" && state !== "all") rows = rows.filter((item) => item.status === state);
   if (caseType === "工事" && state === "処理済み") rows = rows.filter((item) => item.processState === "処理済み");
   if (caseType === "工事" && state === "要確認") rows = rows.filter((item) => item.processState === "要確認");
@@ -1375,6 +1348,7 @@ function confirmDeliveryMail(confirmationId) {
   if (!target || target.caseType !== "配送") return;
   confirmation.status = "confirmed";
   target.deliveryType = "ハイアール";
+  if (target.workType === "販売店案件") target.workType = "配送設置";
   target.processState = "処理済み";
   setDeliveryStatus(target, "作業確定", "配送メール案件確定");
   if (!target.history.some((entry) => entry.includes("配送メール案件確定"))) {
@@ -1818,12 +1792,13 @@ function renderChecklist() {
   const select = $("#checklistCaseSelect");
   if (!select) return;
 
-  const selectedCaseId = select.value || cases.find((item) => item.id.startsWith("AIZA"))?.id || cases[0]?.id || "";
+  const checklistCases = cases.filter((item) => item.caseType === "配送" && isConfirmedForCaseManagement(item));
+  const selectedCaseId = select.value || checklistCases[0]?.id || "";
   select.innerHTML = cases
-    .filter((item) => item.id.startsWith("AIZA") || item.deliveryType)
+    .filter((item) => item.caseType === "配送" && isConfirmedForCaseManagement(item))
     .map((item) => `<option value="${item.id}">${item.id} ${item.siteName}</option>`)
     .join("");
-  select.value = cases.some((item) => item.id === selectedCaseId) ? selectedCaseId : select.options[0]?.value || "";
+  select.value = checklistCases.some((item) => item.id === selectedCaseId) ? selectedCaseId : select.options[0]?.value || "";
 
   $("#carryInChecks").innerHTML = carryInCheckLabels
     .map((label, index) => `<label class="check-row"><input type="checkbox" data-check-group="carryIn" data-check-index="${index}" /><span>${label}</span></label>`)
