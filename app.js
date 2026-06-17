@@ -376,6 +376,7 @@ let stateFilter = "all";
 let constructionStateFilter = "all";
 let typeFilter = "all";
 let confirmFilter = "all";
+let deliveryTypeFilter = "all";
 let calendarRange = "today";
 let currentRole = "admin";
 let currentDetailId = cases[0].id;
@@ -493,14 +494,18 @@ const constructionCaseType = cases.find((item) => item.id.startsWith("KOJI"))?.c
 
 const titles = {
   dashboard: "ダッシュボード",
-  deliveryCases: "配送案件一覧",
-  constructionCases: "工事案件一覧",
+  deliveryCases: "案件管理",
+  constructionCases: "案件管理",
   caseDetail: "案件詳細",
   newCase: "新規登録",
-  confirmations: "要確認一覧",
-  reports: "作業完了報告書",
-  checklists: "作業チェック表",
-  settings: "管理設定",
+  confirmations: "配送メール受信",
+  dispatchManagement: "配車管理",
+  reports: "報告書",
+  checklists: "作業管理",
+  customers: "顧客管理",
+  workers: "作業員",
+  vehicles: "車両",
+  settings: "設定",
 };
 
 const roleLabels = {
@@ -788,9 +793,21 @@ function showApp() {
 function switchView(viewName) {
   if (viewName === "settings" && currentRole !== "admin") return;
   $all(".view").forEach((view) => view.classList.remove("active-view"));
-  $(`#${viewName}`).classList.add("active-view");
+  const view = $(`#${viewName}`);
+  if (!view) return;
+  view.classList.add("active-view");
   $("#pageTitle").textContent = titles[viewName] || "業務管理";
-  $all(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === viewName));
+  $all(".nav-item").forEach((item) => {
+    const isDeliveryChild = item.dataset.view === "deliveryCases" && viewName === "deliveryCases" && item.dataset.deliveryTypeFilter === deliveryTypeFilter;
+    const isDirect = item.dataset.view === viewName && item.dataset.view !== "deliveryCases";
+    item.classList.toggle("active", isDeliveryChild || isDirect);
+  });
+  $all(".nav-group").forEach((group) => {
+    const hasActive = Boolean(group.querySelector(".nav-subitem.active"));
+    group.classList.toggle("has-active", hasActive);
+    if (hasActive) group.classList.add("open");
+    group.querySelector(".nav-parent")?.setAttribute("aria-expanded", String(group.classList.contains("open")));
+  });
 }
 
 function openTypeList(caseType) {
@@ -799,6 +816,7 @@ function openTypeList(caseType) {
     switchView("constructionCases");
   } else {
     lastListView = "deliveryCases";
+    deliveryTypeFilter = "all";
     switchView("deliveryCases");
   }
 }
@@ -1013,6 +1031,105 @@ function renderVehicleRuns() {
       `;
     })
     .join("") || `<p class="empty-state">本日の配送便はありません</p>`;
+}
+
+function renderDispatchManagement() {
+  const target = $("#dispatchRunList");
+  if (!target) return;
+  const runs = deliveryRuns.filter((run) => run.deliveryDate === todayDate);
+  $("#dispatchRunCount").textContent = `${runs.length}台`;
+  target.innerHTML =
+    runs
+      .map((run) => {
+        const step = getRunStep(run);
+        const doneCount = run.stops.filter((stop) => stop.departedAt).length;
+        const nextStop = run.stops.find((stop) => !stop.departedAt);
+        const nextCase = nextStop ? cases.find((item) => item.id === nextStop.caseId) : null;
+        return `
+          <button class="vehicle-run-card tappable-card" type="button" data-open-run="${run.id}">
+            <div class="vehicle-run-head">
+              <div>
+                <strong>${run.plateNo}</strong>
+                <span>${run.vehicleName} / ${run.runName}</span>
+              </div>
+              ${badge(step.status)}
+            </div>
+            <div class="vehicle-run-meta">
+              <span>担当: ${run.driverName}</span>
+              <span>案件: ${doneCount}/${run.stops.length}</span>
+            </div>
+            <p class="workflow-site">次: ${nextCase ? `${nextCase.id} ${nextCase.siteName}` : "帰社または完了"}</p>
+          </button>
+        `;
+      })
+      .join("") || `<p class="empty-state">本日の稼働車両はありません</p>`;
+}
+
+function renderMasterViews() {
+  const customerMap = new Map();
+  cases.forEach((item) => {
+    if (!customerMap.has(item.customerName)) customerMap.set(item.customerName, []);
+    customerMap.get(item.customerName).push(item);
+  });
+  const customers = [...customerMap.entries()];
+  const customerCount = $("#customerCount");
+  if (customerCount) customerCount.textContent = `${customers.length}件`;
+  const customerList = $("#customerList");
+  if (customerList) {
+    customerList.innerHTML = customers
+      .map(([name, items]) => {
+        const latest = items[0];
+        return `
+          <article class="management-card">
+            <strong>${name}</strong>
+            <span>${latest.customerPhone || "電話番号未登録"}</span>
+            <p>${latest.customerAddress || latest.siteName} / 案件${items.length}件</p>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  const workerMap = new Map();
+  cases.forEach((item) => {
+    const name = item.worker || "担当未設定";
+    if (!workerMap.has(name)) workerMap.set(name, []);
+    workerMap.get(name).push(item);
+  });
+  const workers = [...workerMap.entries()];
+  const workerCount = $("#workerCount");
+  if (workerCount) workerCount.textContent = `${workers.length}名`;
+  const workerList = $("#workerList");
+  if (workerList) {
+    workerList.innerHTML = workers
+      .map(
+        ([name, items]) => `
+          <article class="management-card">
+            <strong>${name}</strong>
+            <span>担当案件 ${items.length}件</span>
+            <p>${items.map((item) => item.region).filter(Boolean)[0] || "地域未設定"}</p>
+          </article>
+        `,
+      )
+      .join("");
+  }
+
+  const vehicleCount = $("#vehicleCount");
+  if (vehicleCount) vehicleCount.textContent = `${deliveryRuns.length}台`;
+  const vehicleList = $("#vehicleList");
+  if (vehicleList) {
+    vehicleList.innerHTML = deliveryRuns
+      .map(
+        (run) => `
+          <article class="management-card">
+            <strong>${run.vehicleName}</strong>
+            <span>${run.plateNo}</span>
+            <p>${run.driverName} / ${run.runName} / 案件${run.stops.length}件</p>
+          </article>
+        `,
+      )
+      .join("");
+  }
 }
 
 function renderVehicleRunDialog(runId) {
@@ -1232,6 +1349,7 @@ function getFilteredCases(caseType) {
   const state = caseType === "工事" ? constructionStateFilter : stateFilter;
   let rows = cases.filter((item) => item.caseType === caseType);
   if (region !== "all") rows = rows.filter((item) => item.region === region);
+  if (caseType === "配送" && deliveryTypeFilter !== "all") rows = rows.filter((item) => (item.deliveryType || "ハイアール") === deliveryTypeFilter);
   if (caseType === "配送" && state !== "all") rows = rows.filter((item) => item.status === state);
   if (caseType === "工事" && state === "処理済み") rows = rows.filter((item) => item.processState === "処理済み");
   if (caseType === "工事" && state === "要確認") rows = rows.filter((item) => item.processState === "要確認");
@@ -1314,6 +1432,8 @@ function deliveryWorkflowCard(item, lane) {
 function renderCases() {
   renderRegionTabs();
   const rows = getFilteredCases("配送");
+  const heading = $("#deliveryCaseHeading");
+  if (heading) heading.textContent = deliveryTypeFilter === "all" ? "配送案件一覧" : `${deliveryTypeFilter}案件一覧`;
   $("#deliveryCaseCount").textContent = `${rows.length}件`;
   $("#deliveryCaseRows").innerHTML =
     rows
@@ -2016,6 +2136,8 @@ function renderAll() {
   renderConstructionCases();
   renderConfirmations();
   renderChecklist();
+  renderDispatchManagement();
+  renderMasterViews();
   renderReportQueue();
 }
 
@@ -2152,8 +2274,30 @@ document.addEventListener("click", (event) => {
   const viewLink = event.target.closest("[data-view-link]");
   if (viewLink) switchView(viewLink.dataset.viewLink);
 
+  const navToggle = event.target.closest("[data-nav-toggle]");
+  if (navToggle) {
+    const group = navToggle.closest(".nav-group");
+    group?.classList.toggle("open");
+    navToggle.setAttribute("aria-expanded", String(group?.classList.contains("open")));
+    return;
+  }
+
   const navItem = event.target.closest(".nav-item");
-  if (navItem) switchView(navItem.dataset.view);
+  if (navItem?.dataset.view) {
+    if (navItem.dataset.deliveryTypeFilter) {
+      deliveryTypeFilter = navItem.dataset.deliveryTypeFilter;
+      lastListView = "deliveryCases";
+      renderCases();
+    } else if (navItem.dataset.view === "constructionCases") {
+      lastListView = "constructionCases";
+    } else if (navItem.dataset.view === "deliveryCases") {
+      deliveryTypeFilter = "all";
+      lastListView = "deliveryCases";
+      renderCases();
+    }
+    switchView(navItem.dataset.view);
+    return;
+  }
 
   const openRunButton = event.target.closest("[data-open-run]");
   if (openRunButton) {

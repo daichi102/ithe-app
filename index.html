@@ -52,12 +52,24 @@
           </div>
         </div>
         <nav class="nav-list" aria-label="メインメニュー">
-          <button class="nav-item active" data-view="dashboard"><span>□</span>ダッシュボード</button>
-          <button class="nav-item" data-view="deliveryCases"><span>⇄</span>配送案件</button>
-          <button class="nav-item" data-view="constructionCases"><span>▤</span>工事案件</button>
-          <button class="nav-item" data-view="reports"><span>✓</span>完了報告</button>
-          <button class="nav-item" data-view="confirmations"><span>!</span>要確認</button>
-          <button class="nav-item admin-only" data-view="settings"><span>⚙</span>管理設定</button>
+          <button class="nav-item active" data-view="confirmations"><span>□</span>配送メール受信</button>
+          <div class="nav-group open">
+            <button class="nav-item nav-parent" type="button" data-nav-toggle="caseManagement" aria-expanded="true">
+              <span>▤</span>案件管理
+            </button>
+            <div class="nav-submenu" data-nav-panel="caseManagement">
+              <button class="nav-item nav-subitem" type="button" data-view="deliveryCases" data-delivery-type-filter="ハイアール">ハイアール</button>
+              <button class="nav-item nav-subitem" type="button" data-view="deliveryCases" data-delivery-type-filter="販売店">販売店</button>
+              <button class="nav-item nav-subitem" type="button" data-view="constructionCases">工事</button>
+            </div>
+          </div>
+          <button class="nav-item" data-view="dispatchManagement"><span>⇄</span>配車管理</button>
+          <button class="nav-item" data-view="checklists"><span>✓</span>作業管理</button>
+          <button class="nav-item" data-view="reports"><span>▣</span>報告書</button>
+          <button class="nav-item" data-view="customers"><span>人</span>顧客管理</button>
+          <button class="nav-item" data-view="workers"><span>担</span>作業員</button>
+          <button class="nav-item" data-view="vehicles"><span>車</span>車両</button>
+          <button class="nav-item admin-only" data-view="settings"><span>⚙</span>設定</button>
         </nav>
         <div class="sidebar-foot">
           <span>対象業務</span>
@@ -69,7 +81,7 @@
         <header class="topbar">
           <div>
             <p class="eyebrow">業務管理</p>
-            <h2 id="pageTitle">ダッシュボード</h2>
+            <h2 id="pageTitle">配送メール受信</h2>
           </div>
           <div class="topbar-actions">
             <div class="search-box">
@@ -84,7 +96,7 @@
           </div>
         </header>
 
-        <section id="dashboard" class="view active-view">
+        <section id="dashboard" class="view">
           <section class="panel dashboard-calendar-panel">
             <div class="panel-head">
               <div>
@@ -158,7 +170,7 @@
           </div>
           <section class="panel table-panel">
             <div class="panel-head">
-              <h3>配送案件一覧</h3>
+              <h3 id="deliveryCaseHeading">配送案件一覧</h3>
               <span id="deliveryCaseCount" class="count-pill"></span>
             </div>
             <div class="table-wrap">
@@ -222,6 +234,19 @@
           </section>
         </section>
 
+        <section id="dispatchManagement" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h3>配車管理</h3>
+                <p class="panel-subtitle">本日稼働する車両と担当案件を確認します。</p>
+              </div>
+              <span id="dispatchRunCount" class="count-pill"></span>
+            </div>
+            <div id="dispatchRunList" class="vehicle-run-grid"></div>
+          </section>
+        </section>
+
         <section id="caseDetail" class="view">
           <button class="back-button" type="button" id="detailBackButton">← 一覧へ戻る</button>
           <div id="detailContent"></div>
@@ -232,7 +257,7 @@
           <div id="newCaseContent"></div>
         </section>
 
-        <section id="confirmations" class="view">
+        <section id="confirmations" class="view active-view">
           <div class="toolbar">
             <div class="search-box compact">
               <span>⌕</span>
@@ -246,8 +271,8 @@
           </div>
           <section class="panel table-panel">
             <div class="panel-head">
-              <h3>要確認一覧</h3>
-              <span class="muted">工事の現地確認、配送の取込エラーを同じ一覧で扱う</span>
+              <h3>配送メール受信</h3>
+              <span class="muted">配送メールの取込結果と確認が必要な内容を扱う</span>
             </div>
             <div id="confirmCards" class="confirm-grid"></div>
           </section>
@@ -400,6 +425,36 @@
                 </div>
               </div>
             </div>
+          </section>
+        </section>
+
+        <section id="customers" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <h3>顧客管理</h3>
+              <span id="customerCount" class="count-pill"></span>
+            </div>
+            <div id="customerList" class="management-grid"></div>
+          </section>
+        </section>
+
+        <section id="workers" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <h3>作業員</h3>
+              <span id="workerCount" class="count-pill"></span>
+            </div>
+            <div id="workerList" class="management-grid"></div>
+          </section>
+        </section>
+
+        <section id="vehicles" class="view">
+          <section class="panel">
+            <div class="panel-head">
+              <h3>車両</h3>
+              <span id="vehicleCount" class="count-pill"></span>
+            </div>
+            <div id="vehicleList" class="management-grid"></div>
           </section>
         </section>
 

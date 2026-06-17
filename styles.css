@@ -284,6 +284,11 @@ textarea:focus {
   gap: 6px;
 }
 
+.nav-group {
+  display: grid;
+  gap: 4px;
+}
+
 .nav-item {
   min-height: 44px;
   display: flex;
@@ -298,6 +303,35 @@ textarea:focus {
   font-weight: 800;
 }
 
+.nav-parent {
+  width: 100%;
+}
+
+.nav-submenu {
+  display: none;
+  gap: 4px;
+  padding-left: 28px;
+}
+
+.nav-group.open .nav-submenu {
+  display: grid;
+}
+
+.nav-subitem {
+  min-height: 36px;
+  padding: 0 10px;
+  color: #b7c4d6;
+  font-size: 13px;
+}
+
+.nav-subitem::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #718096;
+}
+
 .nav-item span {
   width: 18px;
   text-align: center;
@@ -307,6 +341,11 @@ textarea:focus {
 .nav-item.active,
 .nav-item:hover {
   background: var(--nav-soft);
+  color: #fff;
+}
+
+.nav-group.has-active > .nav-parent {
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
@@ -1605,6 +1644,30 @@ canvas {
 
 .settings-grid p {
   margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.management-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.management-card {
+  min-height: 94px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.management-card strong,
+.management-card span {
+  display: block;
+}
+
+.management-card p {
+  margin: 8px 0 0;
   color: var(--muted);
 }
 
