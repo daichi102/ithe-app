@@ -1,6 +1,12 @@
 const regions = ["関東", "関西", "九州", "東北・信越", "北海道", "中部", "四国"];
 const constructionTypes = ["弱電", "エアコン", "リフォーム"];
-const todayDate = "2026-06-10";
+const localDateKey = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+const todayDate = localDateKey(new Date());
 
 const cases = [
   {
@@ -542,10 +548,12 @@ function parseDate(value) {
 }
 
 function formatDate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return localDateKey(date);
+}
+
+function formatCalendarLabel(date) {
+  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${weekdays[date.getDay()]}）`;
 }
 
 function addDays(date, days) {
@@ -1146,6 +1154,17 @@ function getCalendarDays() {
 
 function renderScheduleCalendar() {
   const days = getCalendarDays();
+  const keys = days.map(formatDate);
+  const periodItems = cases.filter((item) => keys.includes(item.visitDate));
+  const summary = $("#dashboardCalendarSummary");
+  if (summary) {
+    const firstDay = days[0];
+    const lastDay = days[days.length - 1];
+    summary.textContent =
+      calendarRange === "today"
+        ? `${formatCalendarLabel(firstDay)} / ${periodItems.length}件`
+        : `${formatCalendarLabel(firstDay)} - ${formatCalendarLabel(lastDay)} / ${periodItems.length}件`;
+  }
   $("#scheduleCalendar").className = `schedule-calendar ${calendarRange}`;
   $("#scheduleCalendar").innerHTML = days
     .map((date) => {

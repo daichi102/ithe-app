@@ -560,8 +560,17 @@ textarea:focus {
   color: var(--muted);
 }
 
+.dashboard-calendar-panel,
 .dashboard-report-panel {
   margin-bottom: 14px;
+}
+
+.dashboard-calendar-panel {
+  border-top: 4px solid var(--accent);
+}
+
+.dashboard-calendar-panel .panel-head {
+  align-items: flex-start;
 }
 
 .report-queue-panel {
@@ -660,6 +669,15 @@ textarea:focus {
   padding: 10px;
   background: #fbfcfe;
   overflow: auto;
+}
+
+.dashboard-calendar-panel .schedule-calendar.today .schedule-day {
+  min-height: 164px;
+  max-height: none;
+}
+
+.dashboard-calendar-panel .schedule-calendar.today .schedule-items {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .schedule-date {

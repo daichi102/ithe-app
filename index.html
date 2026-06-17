@@ -85,6 +85,20 @@
         </header>
 
         <section id="dashboard" class="view active-view">
+          <section class="panel dashboard-calendar-panel">
+            <div class="panel-head">
+              <div>
+                <h3>本日の予定カレンダー</h3>
+                <p id="dashboardCalendarSummary" class="panel-subtitle"></p>
+              </div>
+              <div class="segmented">
+                <button class="active" type="button" data-calendar-range="today">本日</button>
+                <button type="button" data-calendar-range="week">一週間</button>
+                <button type="button" data-calendar-range="month">一か月</button>
+              </div>
+            </div>
+            <div id="scheduleCalendar" class="schedule-calendar"></div>
+          </section>
           <div class="summary-grid" id="summaryGrid"></div>
           <div class="dashboard-grid">
             <section class="panel">
@@ -121,17 +135,6 @@
               <span id="reportReadyCount" class="count-pill"></span>
             </div>
             <div id="reportReadyCases" class="report-ready-grid"></div>
-          </section>
-          <section class="panel">
-            <div class="panel-head">
-              <h3>予定カレンダー</h3>
-              <div class="segmented">
-                <button class="active" type="button" data-calendar-range="today">本日</button>
-                <button type="button" data-calendar-range="week">一週間</button>
-                <button type="button" data-calendar-range="month">一か月</button>
-              </div>
-            </div>
-            <div id="scheduleCalendar" class="schedule-calendar"></div>
           </section>
         </section>
 
