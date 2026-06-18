@@ -250,6 +250,10 @@ textarea:focus {
   grid-template-columns: 240px minmax(0, 1fr);
 }
 
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
 .sidebar {
   position: sticky;
   top: 0;
@@ -257,6 +261,18 @@ textarea:focus {
   padding: 20px 14px;
   background: var(--nav);
   color: #cbd5e1;
+  overflow: hidden;
+}
+
+.app-shell.sidebar-collapsed .sidebar {
+  width: 0;
+  padding-right: 0;
+  padding-left: 0;
+  border: 0;
+}
+
+.sidebar-toggle {
+  flex: 0 0 auto;
 }
 
 .sidebar-brand {
@@ -1676,9 +1692,17 @@ canvas {
     grid-template-columns: 1fr;
   }
 
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+
   .sidebar {
     position: static;
     height: auto;
+  }
+
+  .app-shell.sidebar-collapsed .sidebar {
+    display: none;
   }
 
   .sidebar-foot {

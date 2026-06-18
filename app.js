@@ -497,8 +497,6 @@ const statusColor = {
   作業中: "yellow",
   作業完了: "green",
   チェック表サイン済み: "green",
-  完了報告作成済み: "green",
-  完了報告書作成: "blue",
   連携済み: "green",
   売上連携済み: "green",
 };
@@ -763,6 +761,15 @@ function showApp() {
   renderAll();
 }
 
+function toggleSidebar() {
+  const app = $("#appView");
+  const button = $("#sidebarToggle");
+  if (!app || !button) return;
+  const collapsed = app.classList.toggle("sidebar-collapsed");
+  button.setAttribute("aria-expanded", String(!collapsed));
+  button.title = collapsed ? "サイドバーを表示" : "サイドバーを隠す";
+}
+
 function switchView(viewName) {
   if (viewName === "settings" && currentRole !== "admin") return;
   $all(".view").forEach((view) => view.classList.remove("active-view"));
@@ -828,7 +835,7 @@ function renderSummary() {
 }
 
 function getReportReadyCases() {
-  return cases.filter((item) => item.caseType === "配送" && isConfirmedForCaseManagement(item) && ["作業完了", "完了報告書作成"].includes(item.status));
+  return cases.filter((item) => item.caseType === "配送" && isConfirmedForCaseManagement(item) && item.status === "作業完了");
 }
 
 function renderReportQueue() {
@@ -847,7 +854,7 @@ function renderReportQueue() {
               <p>${item.region} / ${item.visitDate} / ${item.siteName}</p>
             </div>
             <div class="case-card-actions">
-              ${item.status === "完了報告書作成" ? `<button class="primary operator-action" type="button" data-sales-sync-case="${item.id}">売上システム連携</button>` : `<button class="primary operator-action" type="button" data-report-case="${item.id}">報告書を作る</button>`}
+              <button class="primary operator-action" type="button" data-report-case="${item.id}">報告書を作る</button>
               <button class="secondary" type="button" data-detail="${item.id}" data-source-view="deliveryCases">詳細</button>
             </div>
           </article>
@@ -1225,7 +1232,7 @@ function renderDashboard() {
               <p>${item.region} / ${item.visitDate} / ${item.siteName}</p>
             </div>
             <div class="case-card-actions">
-              ${item.status === "完了報告書作成" ? `<button class="primary operator-action" type="button" data-sales-sync-case="${item.id}">売上システム連携</button>` : `<button class="primary operator-action" type="button" data-report-case="${item.id}">完了報告書作成</button>`}
+              <button class="primary operator-action" type="button" data-report-case="${item.id}">完了報告書作成</button>
               <button class="secondary" type="button" data-detail="${item.id}" data-source-view="deliveryCases">詳細</button>
             </div>
           </article>
@@ -1368,22 +1375,19 @@ function getDeliveryPrimaryAction(item) {
     return `<button class="primary operator-action" type="button" data-confirm-delivery-case="${item.id}">案件確定</button>`;
   }
   if (item.status === "作業確定") {
-    return `<button class="primary operator-action" type="button" data-start-work-case="${item.id}">作業開始</button>`;
+    return "";
   }
   if (item.status === "作業中") {
-    return `<button class="primary operator-action" type="button" data-checklist-case="${item.id}">チェック表</button>`;
+    return "";
   }
   if (item.status === "作業完了") {
-    return `<button class="primary operator-action" type="button" data-report-case="${item.id}">完了報告書作成</button>`;
-  }
-  if (item.status === "完了報告書作成") {
-    return `<button class="primary operator-action" type="button" data-sales-sync-case="${item.id}">売上システム連携</button>`;
+    return "";
   }
   return "";
 }
 
 function isDeliveryComplete(item) {
-  return ["作業完了", "完了報告書作成", "連携済み"].includes(item.status);
+  return ["作業完了", "連携済み"].includes(item.status);
 }
 
 function getDeliveryLane(item) {
@@ -1393,14 +1397,13 @@ function getDeliveryLane(item) {
 }
 
 function deliveryWorkflowCard(item, lane) {
-  const primaryAction =
-    lane === "done"
-      ? `<button class="primary operator-action" type="button" data-report-case="${item.id}">完了報告書</button>`
-      : `<button class="primary operator-action" type="button" data-checklist-case="${item.id}">チェック表</button>`;
-  const signAction =
-    lane === "working"
-      ? `<button class="secondary operator-action" type="button" data-sign-complete="${item.id}">サイン済みにする</button>`
-      : "";
+  let primaryAction = `<button class="primary operator-action" type="button" data-checklist-case="${item.id}">チェック表</button>`;
+  if (item.status === "作業確定") {
+    primaryAction = `<button class="primary operator-action" type="button" data-start-work-case="${item.id}">作業開始</button>`;
+  }
+  if (lane === "done") {
+    primaryAction = `<button class="primary operator-action" type="button" data-report-case="${item.id}">完了報告書</button>`;
+  }
   return `
     <article class="workflow-card" data-detail="${item.id}" data-source-view="deliveryCases" tabindex="0">
       <div class="workflow-card-head">
@@ -1417,7 +1420,6 @@ function deliveryWorkflowCard(item, lane) {
       </div>
       <div class="workflow-card-actions">
         ${primaryAction}
-        ${signAction}
         <button class="secondary" type="button" data-detail="${item.id}" data-source-view="deliveryCases">詳細</button>
       </div>
     </article>
@@ -1507,7 +1509,7 @@ function renderDetail(caseId) {
         </div>
         <div class="form-grid two">
           <label>ステータス<select id="detailStatus" ${isConstruction ? "" : "disabled"}>
-            ${(isConstruction ? ["案件確定済み", "確認中", "要確認", "見積作成中", "作業中", "作業完了"] : ["取り込み済み", "作業確定", "作業中", "作業完了", "完了報告書作成", "連携済み", "要確認"])
+            ${(isConstruction ? ["案件確定済み", "確認中", "要確認", "見積作成中", "作業中", "作業完了"] : ["取り込み済み", "作業確定", "作業中", "作業完了", "連携済み", "要確認"])
               .map((status) => `<option ${status === item.status ? "selected" : ""}>${status}</option>`)
               .join("")}
           </select></label>
@@ -1527,8 +1529,6 @@ function renderDetail(caseId) {
         ${isDealer ? "" : `<label>${isConstruction ? "工事内容" : "商品情報"}<textarea id="detailProduct">${item.product}</textarea></label>`}
         <label>${isDealer ? "備考欄" : isConstruction ? "工事メモ・注意事項" : "注意事項・確認理由"}<textarea id="detailNote" class="${isDealer ? "large-note" : ""}">${isDealer ? item.dealerNote || "" : isConstruction ? item.constructionMemo || item.importError : item.importError}</textarea></label>
         <div class="button-row">
-          <button class="secondary operator-action" type="button" data-view-link="checklists">チェック表</button>
-          <button class="secondary operator-action" type="button" data-view-link="reports">完了報告</button>
           <button class="primary operator-action" type="button" id="saveDetail">保存</button>
         </div>
         <h3>編集履歴</h3>
@@ -1845,7 +1845,7 @@ function fillChecklistDefaults(caseId) {
   clearSignatureCanvas();
   signatureLocked = false;
   const lockButton = $("#lockSignature");
-  if (lockButton) lockButton.textContent = "サイン保存";
+  if (lockButton) lockButton.textContent = "完了";
   activeChecklistRecord = null;
   setChecklistStatus("未保存", "yellow");
   renderChecklistPreview();
@@ -2085,9 +2085,6 @@ function openReportForCase(caseId) {
     worker.add(new Option(item.worker || "担当未設定", item.worker || "担当未設定"));
   }
   worker.value = item.worker || "担当未設定";
-  if (item.caseType === "配送" && item.status === "作業完了") {
-    setDeliveryStatus(item, "完了報告書作成", "完了報告書作成");
-  }
   lastListView = "deliveryCases";
   renderCases();
   renderDashboard();
@@ -2109,12 +2106,12 @@ function setSalesSyncStatus(message, type = "success") {
 
 function syncSalesForCase(caseId) {
   const item = cases.find((entry) => entry.id === caseId);
-  if (!item || item.caseType !== "配送" || item.status !== "完了報告書作成") {
+  if (!item || item.caseType !== "配送" || item.status !== "作業完了") {
     setSalesSyncStatus("エラーが出ました", "error");
     return false;
   }
   try {
-    setDeliveryStatus(item, "連携済み", "売上システム連携");
+    setDeliveryStatus(item, "連携済み", "完了報告書作成");
     renderCases();
     renderDashboard();
     renderReportQueue();
@@ -2207,19 +2204,19 @@ function initSignaturePad() {
     const saved = await saveChecklist();
     if (!saved) {
       signatureLocked = false;
-      $("#lockSignature").textContent = "サイン保存";
+      $("#lockSignature").textContent = "完了";
       return;
     }
     if (target) {
       setDeliveryStatus(target, "作業完了", "チェック表サイン保存");
-      $("#lockSignature").textContent = "保存済み";
+      $("#lockSignature").textContent = "完了済み";
       renderDashboard();
       renderCases();
       renderReportQueue();
       showSignatureReportDialog(caseId);
       return;
     }
-    $("#lockSignature").textContent = "保存済み";
+    $("#lockSignature").textContent = "完了済み";
   });
 }
 
@@ -2262,6 +2259,11 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("click", (event) => {
+  if (event.target.id === "sidebarToggle") {
+    toggleSidebar();
+    return;
+  }
+
   if (event.target.id === "signatureReportYes") {
     const caseId = pendingSignatureReportCaseId;
     hideSignatureReportDialog();
@@ -2360,27 +2362,8 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  const salesSyncButton = event.target.closest("[data-sales-sync-case]");
-  if (salesSyncButton && currentRole !== "viewer") {
-    event.stopPropagation();
-    syncSalesForCase(salesSyncButton.dataset.salesSyncCase);
-    return;
-  }
-
   if (event.target.id === "salesSyncButton" && currentRole !== "viewer") {
     syncSalesForCase(currentReportCaseId || $("#reportCaseId")?.value);
-    return;
-  }
-
-  const signCompleteButton = event.target.closest("[data-sign-complete]");
-  if (signCompleteButton && currentRole !== "viewer") {
-    event.stopPropagation();
-    const target = cases.find((item) => item.id === signCompleteButton.dataset.signComplete);
-    if (target) {
-      setDeliveryStatus(target, "作業完了", "チェック表サイン保存");
-      renderDashboard();
-      renderCases();
-    }
     return;
   }
 
