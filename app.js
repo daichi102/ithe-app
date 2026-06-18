@@ -547,6 +547,205 @@ function nextCaseNumber(prefix) {
   return Math.max(0, ...numbers) + 1;
 }
 
+function columnIndex(ref) {
+  return [...ref.replace(/\d/g, "")].reduce((total, char) => total * 26 + char.charCodeAt(0) - 64, 0) - 1;
+}
+
+function normalizeText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeDateValue(value) {
+  const text = normalizeText(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const slash = text.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+  if (slash) return `${slash[1]}-${slash[2].padStart(2, "0")}-${slash[3].padStart(2, "0")}`;
+  const monthDay = text.match(/(\d{1,2})[/-](\d{1,2})/);
+  if (monthDay) return `${new Date().getFullYear()}-${monthDay[1].padStart(2, "0")}-${monthDay[2].padStart(2, "0")}`;
+  const serial = Number(text);
+  if (Number.isFinite(serial) && serial > 30000 && serial < 80000) {
+    const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
+    return formatDate(date);
+  }
+  return "";
+}
+
+function rowText(rows) {
+  return rows.map((row) => row.filter(Boolean).join(" ")).join("\n");
+}
+
+function readLabeledValue(rows, labels) {
+  for (const row of rows) {
+    for (let index = 0; index < row.length; index += 1) {
+      const cell = normalizeText(row[index]);
+      if (!cell) continue;
+      const label = labels.find((candidate) => cell.includes(candidate));
+      if (!label) continue;
+      const sameCell = cell.replace(label, "").replace(/[：:]/, "").trim();
+      if (sameCell) return sameCell;
+      for (let offset = 1; offset <= 3; offset += 1) {
+        const next = normalizeText(row[index + offset]);
+        if (next) return next;
+      }
+    }
+  }
+  for (let rowIndex = 0; rowIndex < rows.length - 1; rowIndex += 1) {
+    for (let colIndex = 0; colIndex < rows[rowIndex].length; colIndex += 1) {
+      const cell = normalizeText(rows[rowIndex][colIndex]);
+      if (labels.some((label) => cell.includes(label))) {
+        const below = normalizeText(rows[rowIndex + 1][colIndex]);
+        if (below) return below;
+      }
+    }
+  }
+  return "";
+}
+
+async function inflateZipBytes(bytes) {
+  if (!window.DecompressionStream) throw new Error("このブラウザでは圧縮されたxlsxを読めません");
+  const stream = new Blob([bytes]).stream();
+  try {
+    return new Uint8Array(await new Response(stream.pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+  } catch (error) {
+    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate"))).arrayBuffer());
+  }
+}
+
+async function readZipTextEntries(file) {
+  const buffer = await file.arrayBuffer();
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  let endOffset = bytes.length - 22;
+  while (endOffset >= 0 && view.getUint32(endOffset, true) !== 0x06054b50) endOffset -= 1;
+  if (endOffset < 0) throw new Error("xlsxファイルを開けません");
+  const entryCount = view.getUint16(endOffset + 10, true);
+  let centralOffset = view.getUint32(endOffset + 16, true);
+  const entries = new Map();
+  for (let i = 0; i < entryCount; i += 1) {
+    if (view.getUint32(centralOffset, true) !== 0x02014b50) break;
+    const method = view.getUint16(centralOffset + 10, true);
+    const compressedSize = view.getUint32(centralOffset + 20, true);
+    const fileNameLength = view.getUint16(centralOffset + 28, true);
+    const extraLength = view.getUint16(centralOffset + 30, true);
+    const commentLength = view.getUint16(centralOffset + 32, true);
+    const localOffset = view.getUint32(centralOffset + 42, true);
+    const nameBytes = bytes.slice(centralOffset + 46, centralOffset + 46 + fileNameLength);
+    const name = new TextDecoder().decode(nameBytes);
+    const localNameLength = view.getUint16(localOffset + 26, true);
+    const localExtraLength = view.getUint16(localOffset + 28, true);
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+    const compressed = bytes.slice(dataStart, dataStart + compressedSize);
+    let contentBytes = compressed;
+    if (method === 8) contentBytes = await inflateZipBytes(compressed);
+    if (method === 0 || method === 8) entries.set(name, new TextDecoder("utf-8").decode(contentBytes));
+    centralOffset += 46 + fileNameLength + extraLength + commentLength;
+  }
+  return entries;
+}
+
+function parseSharedStrings(xmlText) {
+  if (!xmlText) return [];
+  const xml = new DOMParser().parseFromString(xmlText, "application/xml");
+  return [...xml.querySelectorAll("si")].map((item) => [...item.querySelectorAll("t")].map((text) => text.textContent || "").join(""));
+}
+
+function parseSheetRows(xmlText, sharedStrings) {
+  const xml = new DOMParser().parseFromString(xmlText, "application/xml");
+  return [...xml.querySelectorAll("sheetData row")].map((row) => {
+    const values = [];
+    [...row.querySelectorAll("c")].forEach((cell) => {
+      const ref = cell.getAttribute("r") || "";
+      const index = ref ? columnIndex(ref) : values.length;
+      const type = cell.getAttribute("t");
+      let value = "";
+      if (type === "s") value = sharedStrings[Number(cell.querySelector("v")?.textContent || 0)] || "";
+      else if (type === "inlineStr") value = [...cell.querySelectorAll("t")].map((text) => text.textContent || "").join("");
+      else value = cell.querySelector("v")?.textContent || cell.textContent || "";
+      values[index] = normalizeText(value);
+    });
+    return values;
+  });
+}
+
+function makeImportedDeliveryCase(file, rows) {
+  const text = rowText(rows);
+  const fileBase = file.name.replace(/\.[^.]+$/, "");
+  const id = readLabeledValue(rows, ["案件番号", "受付番号", "管理番号", "問い合わせ番号", "問合せ番号"]) || text.match(/AIZA[-_ ]?\d{6,}/i)?.[0]?.replace(/_/g, "-") || `AIZA-${String(nextCaseNumber("AIZA")).padStart(8, "0")}`;
+  const customerName = readLabeledValue(rows, ["お客様名", "顧客名", "氏名", "名前"]) || "未入力";
+  const customerPhone = readLabeledValue(rows, ["お客様電話", "電話番号", "TEL", "携帯"]) || "";
+  const customerAddress = readLabeledValue(rows, ["お客様住所", "住所", "配送先", "納品先"]) || "";
+  const visitRaw = readLabeledValue(rows, ["配送日", "訪問設置日", "設置日", "希望日", "納品日"]);
+  const visitDate = normalizeDateValue(visitRaw) || todayDate;
+  const product = readLabeledValue(rows, ["商品情報", "商品名", "型番", "品名"]) || "";
+  const requesterName = readLabeledValue(rows, ["依頼主", "送信元", "販売店", "会社名"]) || "Outlook添付Excel";
+  const phoneMatch = text.match(/0\d{1,4}[-\s]?\d{1,4}[-\s]?\d{3,4}/);
+  const caseItem = {
+    id,
+    caseType: "配送",
+    deliveryType: "ハイアール",
+    workType: "配送設置",
+    region: "関東",
+    status: "取り込み済み",
+    processState: "処理済み",
+    requesterName,
+    sender: "Outlook添付Excel",
+    requesterPhone: "",
+    requesterAddress: "",
+    customerKana: "",
+    customerName,
+    customerPhone: customerPhone || phoneMatch?.[0] || "",
+    customerAddress,
+    siteName: `${requesterName} / ${customerName}`,
+    visitDate,
+    receivedAt: `${todayDate} 00:00`,
+    sourceType: "mail_excel",
+    sourceMailId: "-",
+    sourceFileName: file.name,
+    sourceMailbox: "Outlook",
+    companyInquiryNumber: "",
+    importError: "",
+    product,
+    worker: "未割当",
+    estimateAmount: 0,
+    history: [`${todayDate} Outlook添付Excel取り込み: ${file.name}`],
+  };
+  return {
+    caseItem,
+    confirmation: {
+      id: `CNF-UPLOAD-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      caseId: id,
+      source: "Outlook添付Excel",
+      reason: "Excelファイル取込",
+      rawValue: file.name,
+      correctedValue: visitDate,
+      status: "unchecked",
+    },
+  };
+}
+
+async function importDeliveryExcelFiles(files) {
+  let imported = 0;
+  for (const file of files) {
+    const entries = await readZipTextEntries(file);
+    const sharedStrings = parseSharedStrings(entries.get("xl/sharedStrings.xml"));
+    const sheetName = [...entries.keys()].find((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name));
+    if (!sheetName) throw new Error(`${file.name}のシートを読めません`);
+    const rows = parseSheetRows(entries.get(sheetName), sharedStrings);
+    const { caseItem, confirmation } = makeImportedDeliveryCase(file, rows);
+    const existingIndex = cases.findIndex((item) => item.id === caseItem.id);
+    if (existingIndex >= 0) cases[existingIndex] = { ...cases[existingIndex], ...caseItem };
+    else cases.unshift(caseItem);
+    const confirmationIndex = confirmations.findIndex((item) => item.caseId === caseItem.id);
+    if (confirmationIndex >= 0) confirmations[confirmationIndex] = confirmation;
+    else confirmations.unshift(confirmation);
+    imported += 1;
+  }
+  activeConfirmEditId = null;
+  confirmSubmitMessage = `${imported}件のExcelを読み込みました`;
+  renderDashboard();
+  renderConfirmations();
+}
+
 function createDeliveryCase() {
   const number = nextCaseNumber("STORE");
   const id = `STORE-${String(number).padStart(6, "0")}`;
@@ -2317,6 +2516,20 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target.id === "deliveryExcelInput") {
+    const files = [...event.target.files].filter((file) => file.name.toLowerCase().endsWith(".xlsx"));
+    if (!files.length) return;
+    importDeliveryExcelFiles(files)
+      .catch((error) => {
+        confirmSubmitMessage = `Excel読込に失敗しました: ${error.message}`;
+        renderConfirmations();
+      })
+      .finally(() => {
+        event.target.value = "";
+      });
+    return;
+  }
+
   if (event.target.id === "confirmTimeType") {
     toggleConfirmTimeRange();
     return;

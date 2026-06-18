@@ -219,6 +219,21 @@ textarea:focus {
   padding: 0 14px;
 }
 
+.import-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.import-button input {
+  display: none;
+}
+
 .ghost {
   border: 0;
   background: var(--accent-soft);
