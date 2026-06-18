@@ -9,7 +9,7 @@ import sqlite3
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("ITHE_DB_PATH", ROOT / "ithe_app.db")).resolve()
 HOST = os.environ.get("ITHE_HOST", "127.0.0.1")
-PORT = int(os.environ.get("ITHE_PORT", "8000"))
+PORT = int(os.environ.get("PORT", os.environ.get("ITHE_PORT", "8000")))
 
 
 def get_connection():

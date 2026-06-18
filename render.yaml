@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: ithe-app
+    runtime: python
+    plan: free
+    buildCommand: ""
+    startCommand: python server.py
+    envVars:
+      - key: ITHE_HOST
+        value: 0.0.0.0
