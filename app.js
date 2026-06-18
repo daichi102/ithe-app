@@ -1350,6 +1350,13 @@ function setDeliveryStatus(item, status, reason) {
   item.history.unshift(`2026-06-10 ${reason}: ${before} → ${status}`);
 }
 
+function buildDeliveryTimePreference(type, start, end) {
+  if (type === "AM希望" || type === "PM希望") return type;
+  if (type !== "時間指定" || !start) return "";
+  if (end) return `${start}時～${end}時`;
+  return `${start}時以降`;
+}
+
 function confirmDeliveryMail(confirmationId, payload = {}) {
   const confirmation = confirmations.find((item) => item.id === confirmationId);
   if (!confirmation) return;
@@ -1362,6 +1369,7 @@ function confirmDeliveryMail(confirmationId, payload = {}) {
   target.customerPhone = payload.customerPhone?.trim() || target.customerPhone;
   target.customerAddress = payload.customerAddress?.trim() || target.customerAddress;
   target.visitDate = payload.visitDate || target.visitDate;
+  target.deliveryTimePreference = buildDeliveryTimePreference(payload.timeType, payload.timeStart, payload.timeEnd);
   target.siteName = target.siteName || `${target.deliveryType} / ${target.customerName}`;
   confirmation.correctedValue = target.visitDate;
   target.processState = "処理済み";
@@ -1578,6 +1586,7 @@ function renderDeliveryFields(item) {
     field("住所", maskAddress(item.customerAddress)),
     field("設置商品情報", item.product),
     field("訪問設置日", item.visitDate),
+    field("時間希望", item.deliveryTimePreference),
     field("弊社問い合わせ番号", item.companyInquiryNumber),
     field("注意事項・要確認理由", item.importError),
     field("編集履歴", `${item.history.length}件`),
@@ -1763,6 +1772,9 @@ function isConfirmedForCaseManagement(item) {
 function renderConfirmEditRow(confirmation) {
   const target = cases.find((item) => item.id === confirmation.caseId);
   if (!target) return "";
+  const hourOptions = Array.from({ length: 13 }, (_, index) => index + 8)
+    .map((hour) => `<option value="${hour}">${hour}時</option>`)
+    .join("");
   return `
     <tr class="confirm-edit-row">
       <td colspan="7">
@@ -1772,6 +1784,16 @@ function renderConfirmEditRow(confirmation) {
             <label>電話番号<input id="confirmCustomerPhone" value="${escapeHtml(target.customerPhone || "")}" /></label>
             <label>住所<input id="confirmCustomerAddress" value="${escapeHtml(target.customerAddress || "")}" /></label>
             <label>配送日<input id="confirmVisitDate" type="date" value="${escapeHtml(/^\d{4}-\d{2}-\d{2}$/.test(target.visitDate || "") ? target.visitDate : "")}" /></label>
+            <label>時間希望<select id="confirmTimeType">
+              <option value="">未選択</option>
+              <option value="AM希望">AM希望</option>
+              <option value="PM希望">PM希望</option>
+              <option value="時間指定">時間指定</option>
+            </select></label>
+            <div id="confirmTimeRange" class="time-range-fields hidden">
+              <label>開始時刻<select id="confirmTimeStart"><option value="">未選択</option>${hourOptions}</select></label>
+              <label>終了時刻<select id="confirmTimeEnd"><option value="">指定なし</option>${hourOptions}</select></label>
+            </div>
           </div>
           <div class="button-row">
             <button class="secondary" type="button" id="cancelConfirmEdit">キャンセル</button>
@@ -1781,6 +1803,12 @@ function renderConfirmEditRow(confirmation) {
       </td>
     </tr>
   `;
+}
+
+function toggleConfirmTimeRange() {
+  const range = $("#confirmTimeRange");
+  const type = $("#confirmTimeType")?.value;
+  if (range) range.classList.toggle("hidden", type !== "時間指定");
 }
 
 function renderConfirmations() {
@@ -2287,6 +2315,11 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target.id === "confirmTimeType") {
+    toggleConfirmTimeRange();
+    return;
+  }
+
   if (event.target.id === "checklistCaseSelect") {
     fillChecklistDefaults(event.target.value);
     loadChecklist(event.target.value);
@@ -2445,6 +2478,9 @@ document.addEventListener("click", (event) => {
       customerPhone: $("#confirmCustomerPhone")?.value,
       customerAddress: $("#confirmCustomerAddress")?.value,
       visitDate: $("#confirmVisitDate")?.value,
+      timeType: $("#confirmTimeType")?.value,
+      timeStart: $("#confirmTimeStart")?.value,
+      timeEnd: $("#confirmTimeEnd")?.value,
     });
     return;
   }
