@@ -724,26 +724,40 @@ function makeImportedDeliveryCase(file, rows) {
 }
 
 async function importDeliveryExcelFiles(files) {
-  let imported = 0;
+  const imports = [];
   for (const file of files) {
     const entries = await readZipTextEntries(file);
     const sharedStrings = parseSharedStrings(entries.get("xl/sharedStrings.xml"));
     const sheetName = [...entries.keys()].find((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name));
     if (!sheetName) throw new Error(`${file.name}のシートを読めません`);
     const rows = parseSheetRows(entries.get(sheetName), sharedStrings);
-    const { caseItem, confirmation } = makeImportedDeliveryCase(file, rows);
+    imports.push(makeImportedDeliveryCase(file, rows));
+  }
+  mergeImportedDeliveries(imports, "Excelを読み込みました");
+}
+
+function mergeImportedDeliveries(imports, messagePrefix) {
+  imports.forEach(({ caseItem, confirmation }) => {
     const existingIndex = cases.findIndex((item) => item.id === caseItem.id);
     if (existingIndex >= 0) cases[existingIndex] = { ...cases[existingIndex], ...caseItem };
     else cases.unshift(caseItem);
     const confirmationIndex = confirmations.findIndex((item) => item.caseId === caseItem.id);
     if (confirmationIndex >= 0) confirmations[confirmationIndex] = confirmation;
     else confirmations.unshift(confirmation);
-    imported += 1;
-  }
+  });
   activeConfirmEditId = null;
-  confirmSubmitMessage = `${imported}件のExcelを読み込みました`;
+  confirmSubmitMessage = `${messagePrefix}: ${imports.length}件`;
   renderDashboard();
   renderConfirmations();
+}
+
+async function importOutlookDeliveryExcels() {
+  confirmSubmitMessage = "Outlookメールを確認中です";
+  renderConfirmations();
+  const response = await fetch("/api/outlook_import");
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  mergeImportedDeliveries(data.imports || [], "Outlookから読み込みました");
 }
 
 function createDeliveryCase() {
@@ -2774,6 +2788,15 @@ document.addEventListener("click", (event) => {
     event.stopPropagation();
     confirmSubmitMessage = "";
     renderConfirmations();
+    return;
+  }
+
+  if (event.target.id === "outlookImportButton" && currentRole !== "viewer") {
+    event.stopPropagation();
+    importOutlookDeliveryExcels().catch((error) => {
+      confirmSubmitMessage = `Outlook取込に失敗しました: ${error.message}`;
+      renderConfirmations();
+    });
     return;
   }
 
