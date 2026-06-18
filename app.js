@@ -1352,9 +1352,11 @@ function setDeliveryStatus(item, status, reason) {
 
 function buildDeliveryTimePreference(type, start, end) {
   if (type === "AM希望" || type === "PM希望") return type;
-  if (type !== "時間指定" || !start) return "";
-  if (end) return `${start}時～${end}時`;
-  return `${start}時以降`;
+  if (type !== "時間指定") return "";
+  if (start && end) return `${start}時～${end}時`;
+  if (end) return `${end}時まで`;
+  if (start) return `${start}時以降`;
+  return "";
 }
 
 function confirmDeliveryMail(confirmationId, payload = {}) {
