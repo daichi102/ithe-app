@@ -386,6 +386,9 @@ let lastListView = "deliveryCases";
 let newCaseMode = "delivery";
 let signatureLocked = false;
 let activeChecklistRecord = null;
+let activeConfirmEditId = null;
+let confirmSubmitMessage = "";
+let deliveryCaseMessage = "";
 const checklistStoragePrefix = "ithe_delivery_checklist:";
 const vehicleRunStorageKey = "ithe_vehicle_runs";
 let pendingSignatureReportCaseId = null;
@@ -1348,7 +1351,7 @@ function setDeliveryStatus(item, status, reason) {
   item.history.unshift(`2026-06-10 ${reason}: ${before} → ${status}`);
 }
 
-function confirmDeliveryMail(confirmationId) {
+function confirmDeliveryMail(confirmationId, payload = {}) {
   const confirmation = confirmations.find((item) => item.id === confirmationId);
   if (!confirmation) return;
   const target = cases.find((item) => item.id === confirmation.caseId);
@@ -1356,15 +1359,26 @@ function confirmDeliveryMail(confirmationId) {
   confirmation.status = "confirmed";
   target.deliveryType = "ハイアール";
   if (target.workType === "販売店案件") target.workType = "配送設置";
+  target.customerName = payload.customerName?.trim() || target.customerName;
+  target.customerPhone = payload.customerPhone?.trim() || target.customerPhone;
+  target.customerAddress = payload.customerAddress?.trim() || target.customerAddress;
+  target.visitDate = payload.visitDate || target.visitDate;
+  target.siteName = target.siteName || `${target.deliveryType} / ${target.customerName}`;
+  confirmation.correctedValue = target.visitDate;
   target.processState = "処理済み";
   setDeliveryStatus(target, "作業確定", "配送メール案件確定");
   if (!target.history.some((entry) => entry.includes("配送メール案件確定"))) {
     target.history.unshift(`2026-06-10 配送メール案件確定: ${confirmation.reason}`);
   }
   deliveryTypeFilter = "ハイアール";
+  activeRegion = "all";
+  activeConfirmEditId = null;
+  confirmSubmitMessage = "送信しました";
+  deliveryCaseMessage = "送信しました";
   renderDashboard();
   renderConfirmations();
   renderCases();
+  switchView("deliveryCases");
 }
 
 function getDeliveryPrimaryAction(item) {
@@ -1431,6 +1445,11 @@ function renderCases() {
   const rows = getFilteredCases("配送");
   const heading = $("#deliveryCaseHeading");
   if (heading) heading.textContent = deliveryTypeFilter === "all" ? "配送案件一覧" : `${deliveryTypeFilter}案件一覧`;
+  const deliveryStatus = $("#deliveryCaseStatus");
+  if (deliveryStatus) {
+    deliveryStatus.textContent = deliveryCaseMessage;
+    deliveryStatus.classList.toggle("hidden", !deliveryCaseMessage);
+  }
   $("#deliveryCaseCount").textContent = `${rows.length}件`;
   $("#deliveryCaseRows").innerHTML =
     rows
@@ -1749,6 +1768,29 @@ function isConfirmedForCaseManagement(item) {
   return !confirmation || confirmation.status === "confirmed";
 }
 
+function renderConfirmEditRow(confirmation) {
+  const target = cases.find((item) => item.id === confirmation.caseId);
+  if (!target) return "";
+  return `
+    <tr class="confirm-edit-row">
+      <td colspan="7">
+        <div class="confirm-edit-panel">
+          <div class="form-grid">
+            <label>お客様名<input id="confirmCustomerName" value="${escapeHtml(target.customerName || "")}" /></label>
+            <label>電話番号<input id="confirmCustomerPhone" value="${escapeHtml(target.customerPhone || "")}" /></label>
+            <label>住所<input id="confirmCustomerAddress" value="${escapeHtml(target.customerAddress || "")}" /></label>
+            <label>配送日<input id="confirmVisitDate" type="date" value="${escapeHtml(/^\d{4}-\d{2}-\d{2}$/.test(target.visitDate || "") ? target.visitDate : "")}" /></label>
+          </div>
+          <div class="button-row">
+            <button class="secondary" type="button" id="cancelConfirmEdit">キャンセル</button>
+            <button class="primary operator-action" type="button" data-submit-confirm-case="${confirmation.id}">送信</button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
 function renderConfirmations() {
   const query = $("#confirmSearch").value.trim();
   let rows = confirmations.filter((item) => item.caseId.startsWith("AIZA"));
@@ -1756,6 +1798,11 @@ function renderConfirmations() {
   if (query) rows = rows.filter((item) => `${item.caseId}${item.reason}${item.source}`.includes(query));
   const count = $("#confirmCaseCount");
   if (count) count.textContent = `${rows.length}件`;
+  const submitStatus = $("#confirmSubmitStatus");
+  if (submitStatus) {
+    submitStatus.textContent = confirmSubmitMessage;
+    submitStatus.classList.toggle("hidden", !confirmSubmitMessage);
+  }
   $("#confirmRows").innerHTML =
     rows
       .map((item) => {
@@ -1775,6 +1822,7 @@ function renderConfirmations() {
               </div>
             </td>
           </tr>
+          ${activeConfirmEditId === item.id ? renderConfirmEditRow(item) : ""}
         `;
       })
       .join("") || `<tr><td colspan="7"><p class="empty-state">対象の配送メールはありません</p></td></tr>`;
@@ -2370,7 +2418,28 @@ document.addEventListener("click", (event) => {
   const confirmCaseButton = event.target.closest("[data-confirm-case]");
   if (confirmCaseButton && currentRole !== "viewer") {
     event.stopPropagation();
-    confirmDeliveryMail(confirmCaseButton.dataset.confirmCase);
+    activeConfirmEditId = confirmCaseButton.dataset.confirmCase;
+    confirmSubmitMessage = "";
+    renderConfirmations();
+    return;
+  }
+
+  if (event.target.id === "cancelConfirmEdit") {
+    event.stopPropagation();
+    activeConfirmEditId = null;
+    renderConfirmations();
+    return;
+  }
+
+  const submitConfirmButton = event.target.closest("[data-submit-confirm-case]");
+  if (submitConfirmButton && currentRole !== "viewer") {
+    event.stopPropagation();
+    confirmDeliveryMail(submitConfirmButton.dataset.submitConfirmCase, {
+      customerName: $("#confirmCustomerName")?.value,
+      customerPhone: $("#confirmCustomerPhone")?.value,
+      customerAddress: $("#confirmCustomerAddress")?.value,
+      visitDate: $("#confirmVisitDate")?.value,
+    });
     return;
   }
 
