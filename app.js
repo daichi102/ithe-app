@@ -1818,7 +1818,7 @@ function renderConfirmations() {
             <td>
               <div class="table-actions">
                 <button class="secondary" type="button" data-detail="${item.caseId}" data-source-view="confirmations">詳細</button>
-                <button class="primary operator-action" type="button" data-confirm-case="${item.id}" ${currentRole === "viewer" || confirmed ? "disabled" : ""}>案件確定</button>
+                ${confirmed ? "" : `<button class="primary operator-action" type="button" data-confirm-case="${item.id}" ${currentRole === "viewer" ? "disabled" : ""}>案件確定</button>`}
               </div>
             </td>
           </tr>
