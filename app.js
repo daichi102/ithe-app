@@ -1760,6 +1760,98 @@ function renderDetail(caseId) {
   switchView("caseDetail");
 }
 
+function parseProductInfo(item) {
+  const parts = (item.product || "").split("/").map((part) => part.trim());
+  return {
+    name: parts[0] || item.product || "",
+    model: parts[1] || "",
+    color: parts[2] || "",
+    quantity: parts[3] || "1",
+    note: parts.slice(4).join(" / "),
+  };
+}
+
+function renderWorkRequestDetail(caseId) {
+  const item = cases.find((entry) => entry.id === caseId) || cases[0];
+  const product = parseProductInfo(item);
+  currentDetailId = item.id;
+  lastListView = "confirmations";
+  $("#detailContent").innerHTML = `
+    <div class="work-request-wrap">
+      <section class="work-request-sheet" aria-label="作業依頼書">
+        <div class="work-request-title">作　業　依　頼　書</div>
+
+        <div class="work-request-top">
+          <div class="work-request-checks">
+            <label><input type="checkbox" /> 見積依頼</label>
+            <label><input type="checkbox" checked /> 工事作業依頼</label>
+          </div>
+          <div class="work-request-mail">
+            <strong>メール送信日時　${escapeHtml(item.receivedAt || "")}</strong>
+            <span>※必ず記入お願いします</span>
+          </div>
+        </div>
+
+        <div class="sheet-table">
+          <div class="sheet-side" style="grid-row: span 4;">ご<br />依<br />頼<br />様</div>
+          <div class="sheet-label">対応業者</div>
+          <div class="sheet-value">${escapeHtml(item.worker || "")}</div>
+          <div class="sheet-label">発注元名</div>
+          <div class="sheet-value">${escapeHtml(item.requesterName || "")}</div>
+          <div class="sheet-label">電話番号</div>
+          <div class="sheet-value">${escapeHtml(item.requesterPhone || "")}</div>
+          <div class="sheet-label">住所</div>
+          <div class="sheet-value">${escapeHtml(item.requesterAddress || "")}</div>
+        </div>
+
+        <div class="sheet-table">
+          <div class="sheet-side" style="grid-row: span 4;">設<br />置<br />先</div>
+          <div class="sheet-label">お客様カナ名</div>
+          <div class="sheet-value">${escapeHtml(item.customerKana || "")}</div>
+          <div class="sheet-label">名前</div>
+          <div class="sheet-value">${escapeHtml(item.customerName || "")}</div>
+          <div class="sheet-label">住所</div>
+          <div class="sheet-value">${escapeHtml(item.customerAddress || "")}</div>
+          <div class="sheet-label">電話番号</div>
+          <div class="sheet-value">${escapeHtml(item.customerPhone || "")}</div>
+        </div>
+
+        <div class="product-table">
+          <div class="sheet-side" style="grid-row: span 4;">設<br />置<br />商<br />品</div>
+          <div class="product-head">品名</div>
+          <div class="product-head">品番</div>
+          <div class="product-head">色</div>
+          <div class="product-head">数量</div>
+          <div class="product-head">備考</div>
+          <div class="product-cell">${escapeHtml(product.name)}</div>
+          <div class="product-cell">${escapeHtml(product.model)}</div>
+          <div class="product-cell">${escapeHtml(product.color)}</div>
+          <div class="product-cell center">${escapeHtml(product.quantity)}</div>
+          <div class="product-cell small">${escapeHtml(product.note || item.sourceFileName || "")}</div>
+          ${Array.from({ length: 10 }, () => `<div class="product-cell">&nbsp;</div>`).join("")}
+        </div>
+
+        <div class="sheet-lines">
+          <div class="line-label">・弊社問合番号：</div><div>${escapeHtml(item.companyInquiryNumber || item.id)}</div>
+          <div class="line-label">・設置訪問日</div><div>${escapeHtml(item.deliveryTimePreference || item.visitDate || "")}</div>
+          <div class="line-label">・商品所在</div><div>入荷日：在庫分使用</div>
+          <div class="line-label">・立会の有無</div><div>無</div>
+          <div class="line-label shade">・設置階</div><div class="shade">&nbsp;</div>
+          <div class="line-label">・既設品搬出</div><div>有</div>
+          <div class="line-label shade">・駐車場</div><div class="shade">&nbsp;</div>
+          <div class="line-label">・保証書</div><div>交換商品の保証書は回収</div>
+          <div class="line-label">・訪問時間連絡</div><div>${escapeHtml(item.deliveryTimePreference || "")}</div>
+          <div class="line-label large">・特記事項</div><div class="large">${escapeHtml(item.importError || "")}</div>
+          <div class="line-label">・担当者</div><div>${escapeHtml(item.worker || "")}</div>
+          <div class="line-label">・注意事項</div><div>&nbsp;</div>
+          <div class="line-note">${escapeHtml(item.importError || item.history?.[0] || "")}</div>
+        </div>
+      </section>
+    </div>
+  `;
+  switchView("caseDetail");
+}
+
 function field(label, value) {
   return `<div class="field"><span>${label}</span><strong>${value || "-"}</strong></div>`;
 }
@@ -2703,6 +2795,10 @@ document.addEventListener("click", (event) => {
   const detailButton = event.target.closest("[data-detail]");
   if (detailButton) {
     if (detailButton.dataset.sourceView) lastListView = detailButton.dataset.sourceView;
+    if (detailButton.dataset.sourceView === "confirmations") {
+      renderWorkRequestDetail(detailButton.dataset.detail);
+      return;
+    }
     renderDetail(detailButton.dataset.detail);
     return;
   }
