@@ -388,7 +388,6 @@ let signatureLocked = false;
 let activeChecklistRecord = null;
 let activeConfirmEditId = null;
 let confirmSubmitMessage = "";
-let deliveryCaseMessage = "";
 const checklistStoragePrefix = "ithe_delivery_checklist:";
 const vehicleRunStorageKey = "ithe_vehicle_runs";
 let pendingSignatureReportCaseId = null;
@@ -1373,12 +1372,10 @@ function confirmDeliveryMail(confirmationId, payload = {}) {
   deliveryTypeFilter = "ハイアール";
   activeRegion = "all";
   activeConfirmEditId = null;
-  confirmSubmitMessage = "送信しました";
-  deliveryCaseMessage = "送信しました";
+  confirmSubmitMessage = "案件管理に送信しました";
   renderDashboard();
   renderConfirmations();
   renderCases();
-  switchView("deliveryCases");
 }
 
 function getDeliveryPrimaryAction(item) {
@@ -1445,11 +1442,6 @@ function renderCases() {
   const rows = getFilteredCases("配送");
   const heading = $("#deliveryCaseHeading");
   if (heading) heading.textContent = deliveryTypeFilter === "all" ? "配送案件一覧" : `${deliveryTypeFilter}案件一覧`;
-  const deliveryStatus = $("#deliveryCaseStatus");
-  if (deliveryStatus) {
-    deliveryStatus.textContent = deliveryCaseMessage;
-    deliveryStatus.classList.toggle("hidden", !deliveryCaseMessage);
-  }
   $("#deliveryCaseCount").textContent = `${rows.length}件`;
   $("#deliveryCaseRows").innerHTML =
     rows
@@ -1800,7 +1792,14 @@ function renderConfirmations() {
   if (count) count.textContent = `${rows.length}件`;
   const submitStatus = $("#confirmSubmitStatus");
   if (submitStatus) {
-    submitStatus.textContent = confirmSubmitMessage;
+    submitStatus.innerHTML = confirmSubmitMessage
+      ? `
+        <div class="confirm-submit-card">
+          <strong>${escapeHtml(confirmSubmitMessage)}</strong>
+          <button class="secondary" type="button" id="closeConfirmSubmitMessage">閉じる</button>
+        </div>
+      `
+      : "";
     submitStatus.classList.toggle("hidden", !confirmSubmitMessage);
   }
   $("#confirmRows").innerHTML =
@@ -2427,6 +2426,13 @@ document.addEventListener("click", (event) => {
   if (event.target.id === "cancelConfirmEdit") {
     event.stopPropagation();
     activeConfirmEditId = null;
+    renderConfirmations();
+    return;
+  }
+
+  if (event.target.id === "closeConfirmSubmitMessage") {
+    event.stopPropagation();
+    confirmSubmitMessage = "";
     renderConfirmations();
     return;
   }

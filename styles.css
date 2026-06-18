@@ -1324,6 +1324,18 @@ td {
   margin-bottom: 10px;
 }
 
+.confirm-submit-card {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 8px 0;
+  text-align: center;
+}
+
+.confirm-submit-card strong {
+  font-size: 17px;
+}
+
 .form-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-bottom: 14px;
