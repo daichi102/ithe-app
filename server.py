@@ -301,8 +301,15 @@ def graph_request(url, token):
             "Prefer": 'outlook.body-content-type="text"',
         },
     )
-    with urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="ignore")
+        auth_header = error.headers.get("WWW-Authenticate", "")
+        raise RuntimeError(
+            f"Microsoft Graph request failed: HTTP {error.code} {detail} {auth_header}"
+        ) from error
 
 
 def email_address(value):
