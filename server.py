@@ -293,6 +293,28 @@ def get_graph_access_token():
         raise RuntimeError(f"Microsoft token request failed: HTTP {error.code} {detail}") from error
 
 
+def decode_jwt_claims(token):
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return {}
+        payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload.encode("utf-8")).decode("utf-8"))
+    except Exception:
+        return {}
+
+
+def safe_token_claims(token):
+    claims = decode_jwt_claims(token)
+    return {
+        "aud": claims.get("aud"),
+        "tid": claims.get("tid"),
+        "appid": claims.get("appid") or claims.get("azp"),
+        "roles": claims.get("roles", []),
+        "scp": claims.get("scp"),
+    }
+
+
 def graph_request(url, token):
     request = Request(
         url,
@@ -307,8 +329,9 @@ def graph_request(url, token):
     except HTTPError as error:
         detail = error.read().decode("utf-8", errors="ignore")
         auth_header = error.headers.get("WWW-Authenticate", "")
+        claims = safe_token_claims(token)
         raise RuntimeError(
-            f"Microsoft Graph request failed: HTTP {error.code} {detail} {auth_header}"
+            f"Microsoft Graph request failed: HTTP {error.code} {detail} {auth_header} token_claims={claims}"
         ) from error
 
 
