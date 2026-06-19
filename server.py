@@ -1,7 +1,7 @@
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from io import BytesIO
@@ -42,11 +42,21 @@ def use_postgres():
     return bool(DATABASE_URL)
 
 
+def normalized_database_url():
+    if not DATABASE_URL:
+        return ""
+    parts = urlsplit(DATABASE_URL)
+    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "pgbouncer"]
+    if not any(key == "sslmode" for key, _ in query):
+        query.append(("sslmode", "require"))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
 def get_connection():
     if use_postgres():
         if psycopg is None:
             raise RuntimeError("DATABASE_URL is set but psycopg is not installed")
-        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+        return psycopg.connect(normalized_database_url(), row_factory=dict_row)
 
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB_PATH)
