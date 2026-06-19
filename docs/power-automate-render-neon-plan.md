@@ -1,4 +1,7 @@
-# Power Automate / Render / Neon 構成メモ
+# Power Automate / Render / Supabase 構成メモ
+
+> 方針変更: メール監視はPower AutomateではなくMicrosoft Graph API方式を採用する。
+> 現行手順は `docs/microsoft-graph-outlook-import-setup.md` を参照する。
 
 ## 推奨構成
 
@@ -7,7 +10,7 @@ GitHub
   ↓
 Render
   ↓
-Neon Postgres
+Supabase Postgres
 ```
 
 メール取込は以下の流れにする。
@@ -19,7 +22,7 @@ Power Automate
   ↓
 Render の API
   ↓
-Neon Postgres
+Supabase Postgres
   ↓
 アプリ画面
 ```
@@ -37,9 +40,9 @@ Neon Postgres
 - アプリ本体を公開する場所
 - API を動かす場所
 - Power Automate から送られた案件データを受け取る
-- Neon Postgres に案件データを保存する
+- Supabase Postgres に案件データを保存する
 
-### Neon Postgres
+### Supabase Postgres
 
 - 案件データの保存先
 - 配送メール受信データを保存する
@@ -63,7 +66,7 @@ Neon Postgres
 4. 添付 Excel の アイザ シートを読む
 5. Render API に POST する
 6. Render API が秘密キーを確認する
-7. Render API が Neon Postgres に保存する
+7. Render API が Supabase Postgres に保存する
 8. アプリの配送メール受信画面に未確認案件として表示する
 9. 画面で案件確定する
 10. 案件管理のハイアール案件として管理する
@@ -72,16 +75,16 @@ Neon Postgres
 ## Render に設定する環境変数
 
 ```text
-DATABASE_URL=Neonの接続文字列
+DATABASE_URL=SupabaseのPostgres接続文字列
 POWER_AUTOMATE_SECRET=長い秘密キー
 ```
 
-`DATABASE_URL` は Neon の接続文字列。
+`DATABASE_URL` は Supabase の Postgres 接続文字列。
 
 例:
 
 ```text
-postgresql://user:password@host.neon.tech/dbname?sslmode=require
+postgresql://postgres:password@db.project-ref.supabase.co:5432/postgres?sslmode=require
 ```
 
 `POWER_AUTOMATE_SECRET` は Power Automate からの送信を認証するための秘密キー。
@@ -121,19 +124,18 @@ Body 例:
 
 ## 次に実装するもの
 
-1. Neon にテーブルを作成する
+1. Supabase にテーブルを作成する
 2. Render でアプリを動かす
 3. Render に `DATABASE_URL` と `POWER_AUTOMATE_SECRET` を設定する
-4. アプリに Power Automate 受け取り API を追加する
-5. 配送メール受信画面を DB 読み込みに変更する
-6. 案件確定時のステータス更新も DB 保存に変更する
-7. Power Automate フローを作成してテストする
+4. Power Automate フローを作成してテストする
+5. Supabase 上で保存データを確認する
+6. 必要に応じて Supabase Auth / RLS / Storage へ広げる
 
 ## 推奨する最終構成
 
 ```text
 アプリ公開: Render
 コード管理: GitHub
-DB保存: Neon Postgres
+DB保存: Supabase Postgres
 メール監視: Power Automate
 ```

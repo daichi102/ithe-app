@@ -736,7 +736,7 @@ async function importDeliveryExcelFiles(files) {
   mergeImportedDeliveries(imports, "Excelを読み込みました");
 }
 
-function mergeImportedDeliveries(imports, messagePrefix) {
+function mergeImportedDeliveries(imports, messagePrefix, options = {}) {
   imports.forEach(({ caseItem, confirmation }) => {
     const existingIndex = cases.findIndex((item) => item.id === caseItem.id);
     if (existingIndex >= 0) cases[existingIndex] = { ...cases[existingIndex], ...caseItem };
@@ -746,9 +746,38 @@ function mergeImportedDeliveries(imports, messagePrefix) {
     else confirmations.unshift(confirmation);
   });
   activeConfirmEditId = null;
-  confirmSubmitMessage = `${messagePrefix}: ${imports.length}件`;
+  if (!options.silent) confirmSubmitMessage = `${messagePrefix}: ${imports.length}件`;
   renderDashboard();
   renderConfirmations();
+  renderCases();
+  renderConstructionCases();
+}
+
+async function loadImportedDeliveriesFromServer() {
+  try {
+    const response = await fetch("/api/imported-deliveries");
+    if (!response.ok) return;
+    const data = await response.json();
+    const imports = data.imports || [];
+    if (imports.length) mergeImportedDeliveries(imports, "DB import loaded", { silent: true });
+  } catch (error) {
+    console.warn("Failed to load imported deliveries", error);
+  }
+}
+
+async function persistImportedDelivery(caseId) {
+  const caseItem = cases.find((item) => item.id === caseId);
+  const confirmation = confirmations.find((item) => item.caseId === caseId);
+  if (!caseItem || !confirmation) return;
+  try {
+    await fetch(`/api/imported-deliveries/${encodeURIComponent(caseId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ caseItem, confirmation }),
+    });
+  } catch (error) {
+    console.warn("Failed to persist imported delivery", error);
+  }
 }
 
 async function importOutlookDeliveryExcels() {
@@ -1599,6 +1628,7 @@ function confirmDeliveryMail(confirmationId, payload = {}) {
   renderDashboard();
   renderConfirmations();
   renderCases();
+  persistImportedDelivery(target.id);
 }
 
 function getDeliveryPrimaryAction(item) {
@@ -2945,3 +2975,4 @@ $("#confirmSearch").addEventListener("input", renderConfirmations);
 loadVehicleRunState();
 initSignaturePad();
 renderAll();
+loadImportedDeliveriesFromServer();

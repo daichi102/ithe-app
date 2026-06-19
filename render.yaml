@@ -3,8 +3,20 @@ services:
     name: ithe-app
     runtime: python
     plan: free
-    buildCommand: ""
+    buildCommand: pip install -r requirements.txt
     startCommand: python server.py
     envVars:
       - key: ITHE_HOST
         value: 0.0.0.0
+      - key: DATABASE_URL
+        sync: false
+      - key: POWER_AUTOMATE_SECRET
+        sync: false
+      - key: OUTLOOK_MONITOR_MAILBOX
+        value: info_order@ithe.co.jp
+      - key: MS_TENANT_ID
+        sync: false
+      - key: MS_CLIENT_ID
+        sync: false
+      - key: MS_CLIENT_SECRET
+        sync: false

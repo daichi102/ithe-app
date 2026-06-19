@@ -27,6 +27,60 @@ python server.py
 
 For local-only settings, copy `.env.example` to `.env` as a memo. The server reads OS environment variables directly.
 
+## Render / Supabase / Microsoft Graph
+
+Render uses `render.yaml` and installs Python dependencies from `requirements.txt`.
+
+Set these environment variables in Render:
+
+```text
+DATABASE_URL=Supabase Postgres connection string
+POWER_AUTOMATE_SECRET=shared bearer token for protected import APIs
+OUTLOOK_MONITOR_MAILBOX=info_order@ithe.co.jp
+MS_TENANT_ID=Microsoft Entra tenant ID
+MS_CLIENT_ID=Microsoft Entra application client ID
+MS_CLIENT_SECRET=Microsoft Entra application client secret
+```
+
+Microsoft Graph import endpoint:
+
+```text
+POST https://<render-service-url>/api/graph/outlook-import
+Authorization: Bearer <POWER_AUTOMATE_SECRET>
+Content-Type: application/json
+```
+
+Request body:
+
+```json
+{
+  "limit": 25
+}
+```
+
+The Graph import reads recent Outlook messages from `OUTLOOK_MONITOR_MAILBOX`, finds messages containing `[商品交換依頼]` or `[商品回収依頼]`, parses attached AIZA Excel files, and stores delivery imports in Supabase.
+
+Power Automate compatibility endpoint:
+
+```text
+POST https://<render-service-url>/api/power-automate/delivery-import
+Authorization: Bearer <POWER_AUTOMATE_SECRET>
+Content-Type: application/json
+```
+
+For the fixed-format AIZA Excel sheet, send the attachment content and let the Render API parse it:
+
+```json
+{
+  "attachmentName": "AIZA01143799.xlsx",
+  "attachmentContentBytes": "<Power Automate attachment content bytes>",
+  "mailSubject": "[商品交換依頼] 配送依頼",
+  "mailFrom": "sender@example.com"
+}
+```
+
+The app reads imported delivery cases from `GET /api/imported-deliveries`. Local development falls back to SQLite when `DATABASE_URL` is not set. Use the Supabase PostgreSQL connection string with SSL enabled.
+
 ## Vercel preview while developing
 
 Install and log in to the Vercel CLI once:
