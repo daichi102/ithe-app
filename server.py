@@ -285,8 +285,12 @@ def get_graph_access_token():
         data=data,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    with urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode("utf-8"))["access_token"]
+    try:
+        with urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))["access_token"]
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"Microsoft token request failed: HTTP {error.code} {detail}") from error
 
 
 def graph_request(url, token):
