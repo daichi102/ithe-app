@@ -24,6 +24,11 @@ except ImportError:
     psycopg = None
     dict_row = None
 
+try:
+    import xlrd
+except ImportError:
+    xlrd = None
+
 
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("ITHE_DB_PATH", ROOT / "ithe_app.db")).resolve()
@@ -41,7 +46,8 @@ MS_CLIENT_ID = os.environ.get("MS_CLIENT_ID", "").strip()
 MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET", "").strip()
 HOST = os.environ.get("ITHE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", os.environ.get("ITHE_PORT", "8000")))
-MAIL_KEYWORDS = ["[商品交換依頼]", "[商品回収依頼]"]
+MAIL_KEYWORDS = ["商品交換", "商品回収", "商品手配", "[商品交換依頼]", "[商品回収依頼]"]
+EXCEL_ATTACHMENT_EXTENSIONS = (".xls", ".xlsx")
 XLSX_NS = {
     "main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
     "rel": "http://schemas.openxmlformats.org/package/2006/relationships",
@@ -206,6 +212,36 @@ def parse_sheet_rows(xlsx_bytes):
         return rows
 
 
+def parse_xls_rows(xls_bytes, preferred_name="アイザ"):
+    if xlrd is None:
+        raise RuntimeError("xlrd is not installed")
+    workbook = xlrd.open_workbook(file_contents=xls_bytes)
+    sheet = workbook.sheet_by_name(preferred_name) if preferred_name in workbook.sheet_names() else workbook.sheet_by_index(0)
+    rows = []
+    for row_index in range(sheet.nrows):
+        values = []
+        for col_index in range(sheet.ncols):
+            cell = sheet.cell(row_index, col_index)
+            value = cell.value
+            if cell.ctype == xlrd.XL_CELL_DATE:
+                try:
+                    parts = xlrd.xldate_as_tuple(value, workbook.datemode)
+                    value = f"{parts[0]}-{str(parts[1]).zfill(2)}-{str(parts[2]).zfill(2)}"
+                except Exception:
+                    pass
+            elif isinstance(value, float) and value.is_integer():
+                value = int(value)
+            values.append(clean(value))
+        rows.append(values)
+    return rows
+
+
+def parse_excel_rows(file_name, excel_bytes):
+    if clean(file_name).lower().endswith(".xls"):
+        return parse_xls_rows(excel_bytes)
+    return parse_sheet_rows(excel_bytes)
+
+
 def read_labeled(rows, labels, occurrence=1):
     found = 0
     for row_index, row in enumerate(rows):
@@ -246,8 +282,8 @@ def parse_power_automate_attachment(payload):
         return {}
     if "," in content:
         content = content.split(",", 1)[1]
-    rows = parse_sheet_rows(base64.b64decode(content))
     file_name = clean(payload.get("attachmentName") or payload.get("sourceFileName"))
+    rows = parse_excel_rows(file_name, base64.b64decode(content))
     all_text = "\n".join(" ".join(cell for cell in row if cell) for row in rows)
     inquiry_number = read_labeled(rows, ["弊社問合番号", "問合番号", "問い合わせ番号"])
     case_id = clean(payload.get("caseId")) or (f"AIZA-{inquiry_number}" if inquiry_number else "")
@@ -386,7 +422,7 @@ def import_outlook_messages_via_graph(limit=25):
         attachments = graph_request(f"{base_url}/messages/{quote(message['id'])}/attachments", token).get("value", [])
         for attachment in attachments:
             name = clean(attachment.get("name"))
-            if not name.lower().endswith(".xlsx"):
+            if not name.lower().endswith(EXCEL_ATTACHMENT_EXTENSIONS):
                 continue
             attachment = get_graph_attachment(base_url, message["id"], attachment, token)
             content = attachment.get("contentBytes")
@@ -524,7 +560,7 @@ def debug_imap_messages(limit=25):
                     "from": clean(str(message.get("from", ""))),
                     "subject": subject,
                     "attachmentNames": attachment_names,
-                    "hasXlsx": any(name.lower().endswith(".xlsx") for name in attachment_names),
+                    "hasExcel": any(name.lower().endswith(EXCEL_ATTACHMENT_EXTENSIONS) for name in attachment_names),
                     "matchedKeywords": [keyword for keyword in MAIL_KEYWORDS if keyword in f"{subject}\n{body}"],
                 }
             )
@@ -582,7 +618,7 @@ def import_outlook_messages_via_imap(limit=25):
             source_mail_id = imap_message_id(message, f"imap-{message_number.decode('ascii', errors='ignore')}")
             for attachment in message.iter_attachments():
                 name = clean(attachment.get_filename())
-                if not name or not name.lower().endswith(".xlsx"):
+                if not name or not name.lower().endswith(EXCEL_ATTACHMENT_EXTENSIONS):
                     continue
                 content = attachment.get_payload(decode=True)
                 if not content:
