@@ -6,6 +6,10 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from io import BytesIO
 import base64
+from email import policy
+from email.parser import BytesParser
+from email.utils import parsedate_to_datetime
+import imaplib
 import json
 import os
 import re
@@ -26,6 +30,12 @@ DB_PATH = Path(os.environ.get("ITHE_DB_PATH", ROOT / "ithe_app.db")).resolve()
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 POWER_AUTOMATE_SECRET = os.environ.get("POWER_AUTOMATE_SECRET", "").strip()
 OUTLOOK_MONITOR_MAILBOX = os.environ.get("OUTLOOK_MONITOR_MAILBOX", "info_order@ithe.co.jp").strip()
+MAIL_IMPORT_PROVIDER = os.environ.get("MAIL_IMPORT_PROVIDER", "graph").strip().lower()
+IMAP_HOST = os.environ.get("IMAP_HOST", "").strip()
+IMAP_PORT = int(os.environ.get("IMAP_PORT", "993"))
+IMAP_SSL = os.environ.get("IMAP_SSL", "true").strip().lower() not in {"0", "false", "no", "off"}
+IMAP_USERNAME = os.environ.get("IMAP_USERNAME", "").strip()
+IMAP_PASSWORD = os.environ.get("IMAP_PASSWORD", "")
 MS_TENANT_ID = os.environ.get("MS_TENANT_ID", "").strip()
 MS_CLIENT_ID = os.environ.get("MS_CLIENT_ID", "").strip()
 MS_CLIENT_SECRET = os.environ.get("MS_CLIENT_SECRET", "").strip()
@@ -410,6 +420,141 @@ def import_outlook_messages_via_graph(limit=25):
     return {"mailbox": OUTLOOK_MONITOR_MAILBOX, "imports": imports, "skipped": skipped}
 
 
+def import_outlook_messages(limit=25):
+    if MAIL_IMPORT_PROVIDER == "imap":
+        return import_outlook_messages_via_imap(limit=limit)
+    return import_outlook_messages_via_graph(limit=limit)
+
+
+def require_imap_config():
+    missing = [
+        name
+        for name, value in {
+            "IMAP_HOST": IMAP_HOST,
+            "IMAP_USERNAME": IMAP_USERNAME,
+            "IMAP_PASSWORD": IMAP_PASSWORD,
+        }.items()
+        if not value
+    ]
+    if missing:
+        raise RuntimeError(f"{' / '.join(missing)} are not configured")
+
+
+def imap_message_text(message):
+    chunks = []
+    for part in message.walk():
+        if part.is_multipart() or part.get_content_disposition() == "attachment":
+            continue
+        content_type = part.get_content_type()
+        if content_type not in {"text/plain", "text/html"}:
+            continue
+        try:
+            chunks.append(part.get_content())
+        except Exception:
+            payload = part.get_payload(decode=True)
+            if payload:
+                charset = part.get_content_charset() or "utf-8"
+                chunks.append(payload.decode(charset, errors="ignore"))
+    return clean("\n".join(chunks))
+
+
+def imap_received_at(message):
+    try:
+        parsed = parsedate_to_datetime(str(message.get("date", "")))
+        return parsed.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return ""
+
+
+def imap_message_id(message, fallback):
+    return clean(str(message.get("message-id") or fallback)).strip("<>")
+
+
+def import_outlook_messages_via_imap(limit=25):
+    require_imap_config()
+    mailbox = None
+    imports = []
+    skipped = []
+    try:
+        mailbox = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) if IMAP_SSL else imaplib.IMAP4(IMAP_HOST, IMAP_PORT)
+        mailbox.login(IMAP_USERNAME, IMAP_PASSWORD)
+        status, _ = mailbox.select("INBOX", readonly=True)
+        if status != "OK":
+            raise RuntimeError("IMAP INBOX select failed")
+
+        status, data = mailbox.search(None, "ALL")
+        if status != "OK":
+            raise RuntimeError("IMAP message search failed")
+
+        message_numbers = data[0].split()[-limit:]
+        for message_number in reversed(message_numbers):
+            status, fetched = mailbox.fetch(message_number, "(RFC822)")
+            if status != "OK" or not fetched:
+                skipped.append({"messageId": message_number.decode("ascii", errors="ignore"), "reason": "fetch failed"})
+                continue
+
+            raw_message = next((item[1] for item in fetched if isinstance(item, tuple)), None)
+            if not raw_message:
+                continue
+
+            message = BytesParser(policy=policy.default).parsebytes(raw_message)
+            subject = clean(str(message.get("subject", "")))
+            body = imap_message_text(message)
+            if not any(keyword in f"{subject}\n{body}" for keyword in MAIL_KEYWORDS):
+                continue
+
+            source_mail_id = imap_message_id(message, f"imap-{message_number.decode('ascii', errors='ignore')}")
+            for attachment in message.iter_attachments():
+                name = clean(attachment.get_filename())
+                if not name or not name.lower().endswith(".xlsx"):
+                    continue
+                content = attachment.get_payload(decode=True)
+                if not content:
+                    skipped.append({"messageId": source_mail_id, "fileName": name, "reason": "missing attachment content"})
+                    continue
+                payload = {
+                    "attachmentName": name,
+                    "attachmentContentBytes": base64.b64encode(content).decode("ascii"),
+                    "mailSubject": subject,
+                    "mailFrom": clean(str(message.get("from", ""))),
+                    "receivedAt": imap_received_at(message),
+                    "sourceMailbox": OUTLOOK_MONITOR_MAILBOX or IMAP_USERNAME,
+                    "sourceMailId": source_mail_id,
+                    "sourceType": "imap_mail_excel",
+                    "sourceLabel": "IMAP",
+                }
+                try:
+                    case_id, case_item, confirmation = build_import_payload(payload)
+                    updated_at = upsert_import(case_id, case_item, confirmation, compact_raw_payload(payload))
+                    imports.append(
+                        {
+                            "caseId": case_id,
+                            "updatedAt": str(updated_at),
+                            "caseItem": case_item,
+                            "confirmation": confirmation,
+                        }
+                    )
+                except Exception as error:
+                    skipped.append({"messageId": source_mail_id, "fileName": name, "reason": str(error)})
+    finally:
+        if mailbox is not None:
+            try:
+                mailbox.close()
+            except Exception:
+                pass
+            try:
+                mailbox.logout()
+            except Exception:
+                pass
+
+    return {
+        "mailbox": OUTLOOK_MONITOR_MAILBOX or IMAP_USERNAME,
+        "provider": "imap",
+        "imports": imports,
+        "skipped": skipped,
+    }
+
+
 def build_import_payload(payload):
     if isinstance(payload.get("caseItem"), dict):
         case_item = payload["caseItem"]
@@ -579,7 +724,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     return
                 payload = read_json(self)
                 limit = int(payload.get("limit") or 25)
-                json_response(self, 200, import_outlook_messages_via_graph(limit=max(1, min(limit, 50))))
+                json_response(self, 200, import_outlook_messages(limit=max(1, min(limit, 50))))
                 return
 
             if parsed.path == "/api/power-automate/delivery-import":
