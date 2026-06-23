@@ -144,6 +144,11 @@ def clean(value):
     return " ".join(str(value or "").split()).strip()
 
 
+def clean_data_value(value):
+    text = clean(value)
+    return "" if text in {"・", "-", "ー", "―", "未設定"} else text
+
+
 def normalize_case_id(payload):
     raw = clean(payload.get("caseId") or payload.get("id") or payload.get("case_id"))
     if not raw:
@@ -285,11 +290,14 @@ def parse_power_automate_attachment(payload):
     file_name = clean(payload.get("attachmentName") or payload.get("sourceFileName"))
     rows = parse_excel_rows(file_name, base64.b64decode(content))
     all_text = "\n".join(" ".join(cell for cell in row if cell) for row in rows)
-    inquiry_number = read_labeled(rows, ["弊社問合番号", "問合番号", "問い合わせ番号"])
-    case_id = clean(payload.get("caseId")) or (f"AIZA-{inquiry_number}" if inquiry_number else "")
+    inquiry_number = clean_data_value(read_labeled(rows, ["弊社問合番号", "問合番号", "問い合わせ番号"]))
+    case_id = clean_data_value(payload.get("caseId")) or (f"AIZA-{inquiry_number}" if inquiry_number else "")
     if not case_id:
         match = re.search(r"AIZA[-_ ]?\d{6,}", f"{file_name}\n{all_text}", re.I)
         case_id = match.group(0).replace("_", "-") if match else ""
+    if not case_id:
+        match = re.search(r"(?<!\d)(\d{7,8})(?!\d)", f"{file_name}\n{all_text}")
+        case_id = f"AIZA-{match.group(1)}" if match else ""
     return {
         "caseId": case_id,
         "requesterName": read_labeled(rows, ["発注元名"]),
@@ -584,6 +592,7 @@ def debug_imap_messages(limit=25):
 
 def import_outlook_messages_via_imap(limit=25):
     require_imap_config()
+    delete_import("AIZA-・")
     mailbox = None
     imports = []
     skipped = []
@@ -775,6 +784,15 @@ def upsert_import(case_id, case_item, confirmation, raw_payload):
         ).fetchone()
         connection.commit()
     return row_value(row, "updated_at")
+
+
+def delete_import(case_id):
+    with get_connection() as connection:
+        connection.execute(
+            f"DELETE FROM delivery_imports WHERE case_id = {sql_param()}",
+            (case_id,),
+        )
+        connection.commit()
 
 
 def list_imports():
