@@ -470,6 +470,82 @@ def imap_message_id(message, fallback):
     return clean(str(message.get("message-id") or fallback)).strip("<>")
 
 
+def imap_attachment_names(message):
+    names = []
+    for attachment in message.iter_attachments():
+        name = clean(attachment.get_filename())
+        if name:
+            names.append(name)
+    return names
+
+
+def debug_imap_messages(limit=25):
+    require_imap_config()
+    mailbox = None
+    messages = []
+    try:
+        mailbox = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) if IMAP_SSL else imaplib.IMAP4(IMAP_HOST, IMAP_PORT)
+        mailbox.login(IMAP_USERNAME, IMAP_PASSWORD)
+        status, _ = mailbox.select("INBOX", readonly=True)
+        if status != "OK":
+            raise RuntimeError("IMAP INBOX select failed")
+
+        status, data = mailbox.search(None, "ALL")
+        if status != "OK":
+            raise RuntimeError("IMAP message search failed")
+
+        message_numbers = data[0].split()[-limit:]
+        for message_number in reversed(message_numbers):
+            status, fetched = mailbox.fetch(message_number, "(RFC822)")
+            if status != "OK" or not fetched:
+                messages.append(
+                    {
+                        "messageNumber": message_number.decode("ascii", errors="ignore"),
+                        "error": "fetch failed",
+                    }
+                )
+                continue
+
+            raw_message = next((item[1] for item in fetched if isinstance(item, tuple)), None)
+            if not raw_message:
+                continue
+
+            message = BytesParser(policy=policy.default).parsebytes(raw_message)
+            subject = clean(str(message.get("subject", "")))
+            body = imap_message_text(message)
+            attachment_names = imap_attachment_names(message)
+            messages.append(
+                {
+                    "messageId": imap_message_id(
+                        message,
+                        f"imap-{message_number.decode('ascii', errors='ignore')}",
+                    ),
+                    "receivedAt": imap_received_at(message),
+                    "from": clean(str(message.get("from", ""))),
+                    "subject": subject,
+                    "attachmentNames": attachment_names,
+                    "hasXlsx": any(name.lower().endswith(".xlsx") for name in attachment_names),
+                    "matchedKeywords": [keyword for keyword in MAIL_KEYWORDS if keyword in f"{subject}\n{body}"],
+                }
+            )
+    finally:
+        if mailbox is not None:
+            try:
+                mailbox.close()
+            except Exception:
+                pass
+            try:
+                mailbox.logout()
+            except Exception:
+                pass
+
+    return {
+        "mailbox": OUTLOOK_MONITOR_MAILBOX or IMAP_USERNAME,
+        "provider": "imap",
+        "messages": messages,
+    }
+
+
 def import_outlook_messages_via_imap(limit=25):
     require_imap_config()
     mailbox = None
@@ -725,6 +801,14 @@ class AppHandler(SimpleHTTPRequestHandler):
                 payload = read_json(self)
                 limit = int(payload.get("limit") or 25)
                 json_response(self, 200, import_outlook_messages(limit=max(1, min(limit, 50))))
+                return
+
+            if parsed.path == "/api/imap/debug-messages":
+                if not require_power_automate_auth(self):
+                    return
+                payload = read_json(self)
+                limit = int(payload.get("limit") or 25)
+                json_response(self, 200, debug_imap_messages(limit=max(1, min(limit, 50))))
                 return
 
             if parsed.path == "/api/power-automate/delivery-import":
